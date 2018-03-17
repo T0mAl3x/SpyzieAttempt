@@ -1,5 +1,6 @@
 package src.silent.models;
 
+import java.net.HttpURLConnection;
 import java.net.URL;
 
 /**
@@ -9,11 +10,18 @@ import java.net.URL;
 public class ServerCommunication {
     private static ServerCommunication myInstance = null;
 
-    private URL url = null;
+    private HttpURLConnection connection = null;
 
     private ServerCommunication() {
         try {
-            url = new URL("https://192.168.1.24:44381/api/gatherer");
+            URL url = new URL("http://192.168.1.24:58938/api/");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(15000);
+            conn.setRequestMethod("POST");
+            conn.setDoInput(true);
+            conn.setDoOutput(true);
+
         } catch (Exception ex) {
 
         }
@@ -27,4 +35,6 @@ public class ServerCommunication {
 
         return myInstance;
     }
+
+
 }

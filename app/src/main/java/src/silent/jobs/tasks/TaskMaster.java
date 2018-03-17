@@ -30,14 +30,20 @@ import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLConnection;
+import java.net.URLEncoder;
 import java.security.KeyManagementException;
 import java.security.KeyStore;
 import java.security.KeyStoreException;
@@ -69,10 +75,10 @@ public abstract class TaskMaster extends AsyncTask<Context, Void, Void> {
     @Override
     protected Void doInBackground(Context... params) {
         // TODO: Get the mask from server
-        String mask = "00000000";
+        String mask = "10000000";
 
         this.params = params[0];
-        getAndroidIDModel();
+        //getAndroidIDModel();
 
 
         for (int i = 0; i < 8; i++) {
@@ -119,79 +125,32 @@ public abstract class TaskMaster extends AsyncTask<Context, Void, Void> {
             test[1] = Build.MANUFACTURER;
             test[2] = Build.MODEL;
 
-            // Load CAs from an InputStream
-            // (could be from a resource or ByteArrayInputStream or ...)
-            CertificateFactory cf = CertificateFactory.getInstance("X.509");
-            String Cert_Path = Environment.getExternalStorageDirectory().toString();
-            File file = new File(Cert_Path + "/Test/Cert.cer");
+            URL url = new URL("http://192.168.1.24:58938/api/Service/Post");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setReadTimeout(10000);
+            conn.setConnectTimeout(15000);
+            conn.setRequestMethod("POST");
+            conn.setDoInput(true);
+            conn.setDoOutput(true);
+            conn.setRequestProperty("Content-Type", "application/xml");
 
-            InputStream caInput = new BufferedInputStream(new FileInputStream(file));
-            Certificate ca = cf.generateCertificate(caInput);
-            caInput.close();
+            String body = "";
 
-            // Create a KeyStore containing our trusted CAs
-            String keyStoreType = KeyStore.getDefaultType();
-            KeyStore keyStore = KeyStore.getInstance(keyStoreType);
-            keyStore.load(null, null);
-            keyStore.setCertificateEntry("ca", ca);
+            DataOutputStream output = new DataOutputStream(conn.getOutputStream());
+            output.write(body.getBytes());
+            output.flush();
+            output.close();
 
-            // Create a TrustManager that trusts the CAs in our KeyStore
-            String tmfAlgorithm = TrustManagerFactory.getDefaultAlgorithm();
-            TrustManagerFactory tmf = TrustManagerFactory.getInstance(tmfAlgorithm);
-            tmf.init(keyStore);
+            BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
 
-            // Create an SSLContext that uses our TrustManager
-            SSLContext context = SSLContext.getInstance("TLS");
-            context.init(null, tmf.getTrustManagers(), null);
-
-            // Tell the URLConnection to use a SocketFactory from our SSLContext
-            URL url = new URL("https://192.168.1.24:44381/api/gatherer");
-            HttpsURLConnection connection = (HttpsURLConnection) url.openConnection();
-            connection.setSSLSocketFactory(context.getSocketFactory());
-            connection.setHostnameVerifier(new HostnameVerifier() {
-                @Override
-                public boolean verify(String hostname, SSLSession session) {
-                    return true;
-                }
-            });
-
-
-            connection.setRequestMethod("GET");
-            connection.setRequestProperty("Content-Type", "application/json");
-            connection.setRequestProperty("Accept", "application/json");
-            connection.setDoInput(true);
-            connection.setDoOutput(true);
-            connection.connect();
-
-            JSONObject jsonObject = new JSONObject();
-            jsonObject.put("PhoneManufacturer", test[1]);
-            jsonObject.put("PhoneModel", test[2]);
-            jsonObject.put("IMEI", test[0]);
-
-            InputStream in = connection.getInputStream();
-            //DataOutputStream os = new DataOutputStream(connection.getOutputStream());
-            //os.writeBytes(jsonObject.toString());
-
-            //os.flush();
-            //os.close();
-
-            connection.disconnect();
+            conn.disconnect();
 
             Log.d("IMEI_MODEL", test[0] + " " + test[1] + " " + test[2]);
         } catch (SecurityException ex) {
             Log.d("IMEI EXCEPTION", ex.getMessage());
-        } catch (MalformedURLException ex) {
+        } catch (MalformedURLException e) {
+            e.printStackTrace();
         } catch (IOException e) {
-            e.printStackTrace();
-        } catch (JSONException e) {
-            e.printStackTrace();
-        } catch (CertificateException e) {
-            e.printStackTrace();
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (KeyStoreException e) {
-            e.printStackTrace();
-        } catch (KeyManagementException e) {
             e.printStackTrace();
         }
     }
