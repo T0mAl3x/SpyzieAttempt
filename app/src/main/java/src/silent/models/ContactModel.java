@@ -1,4 +1,4 @@
-package src.silent.jobs.utils;
+package src.silent.models;
 
 import android.graphics.Bitmap;
 import android.net.Uri;

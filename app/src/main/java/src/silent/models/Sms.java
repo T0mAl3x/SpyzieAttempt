@@ -1,4 +1,4 @@
-package src.silent.jobs.utils;
+package src.silent.models;
 
 /**
  * Created by all3x on 2/24/2018.

