@@ -85,8 +85,6 @@ public abstract class TaskMaster extends AsyncTask<Context, Void, Void> {
                     case 7:
                         getBatteryLevel();
                         break;
-                    case 8:
-                        getScreenShot();
                 }
             }
         }
@@ -352,9 +350,5 @@ public abstract class TaskMaster extends AsyncTask<Context, Void, Void> {
         };
         IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
         params.registerReceiver(batteryReceriver, batteryFilter);
-    }
-
-    public void getScreenShot() {
-
     }
 }
