@@ -1,4 +1,4 @@
-package src.silent.jobs.utils;
+package src.silent.utils;
 
 import android.app.job.JobScheduler;
 import android.content.Context;

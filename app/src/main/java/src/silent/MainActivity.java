@@ -16,24 +16,11 @@ public class MainActivity extends AppCompatActivity {
     private static final int jobMaster = 0;
     private JobScheduler jobScheduler;
 
-    private static final String[] NEEDED_PERMS = {
-            Manifest.permission.ACCESS_COARSE_LOCATION,
-            Manifest.permission.ACCESS_FINE_LOCATION,
-            Manifest.permission.READ_SMS,
-            Manifest.permission.READ_CONTACTS,
-            Manifest.permission.READ_CALL_LOG,
-            Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.READ_PHONE_STATE
-    };
-    private static final int NEEDED_PERMS_REQUEST = 1;
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        if (Build.VERSION.SDK_INT >= 23) {
-            requestPermissions(NEEDED_PERMS, NEEDED_PERMS_REQUEST);
-        }
+
         jobScheduler = (JobScheduler) getSystemService(JOB_SCHEDULER_SERVICE);
 
     }
