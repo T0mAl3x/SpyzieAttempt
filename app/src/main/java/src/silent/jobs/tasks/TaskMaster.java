@@ -45,7 +45,7 @@ import src.silent.models.Sms;
  * Created by all3x on 2/23/2018.
  */
 
-public abstract class TaskMaster extends AsyncTask<Context, Void, Void> {
+public class TaskMaster extends AsyncTask<Context, Void, Void> {
 
     private Context params;
 

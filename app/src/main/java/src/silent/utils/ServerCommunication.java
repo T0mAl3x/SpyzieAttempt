@@ -54,12 +54,15 @@ public class ServerCommunication {
                     response = response.replace("\"", "");
                     response = new String(Base64.decode(response, Base64.URL_SAFE), "UTF-8");
 
-                    if (!FileHelper.fileExist(context, "SecurityToken.enc")) {
-                        FileHelper.createFile(context, "SecurityToken.enc");
-                        FileHelper.writeFile(context, "SecurityToken.enc", response);
-                    } else {
-                        FileHelper.writeFile(context, "SecurityToken.enc", response);
+                    if (!response.equals("Already registered")) {
+                        if (!FileHelper.fileExist(context, "SecurityToken.enc")) {
+                            FileHelper.createFile(context, "SecurityToken.enc");
+                            FileHelper.writeFile(context, "SecurityToken.enc", response);
+                        } else {
+                            FileHelper.writeFile(context, "SecurityToken.enc", response);
+                        }
                     }
+
                 } catch (Exception ex) {
                     Log.d("MARK", ex.getMessage());
                 } finally {
