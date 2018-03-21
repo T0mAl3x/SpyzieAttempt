@@ -10,7 +10,7 @@ import java.io.FileOutputStream;
  * Created by all3x on 3/18/2018.
  */
 
-public class FileHelper {
+public class FileHandler {
     public static void createFile(Context context, String filename) {
         try {
             FileOutputStream outputStream = context.openFileOutput(filename, Context.MODE_PRIVATE);

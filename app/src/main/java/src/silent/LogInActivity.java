@@ -12,7 +12,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 
-import src.silent.utils.ServerCommunication;
+import src.silent.utils.ServerCommunicationHandler;
 
 public class LogInActivity extends AppCompatActivity {
 
@@ -81,7 +81,7 @@ public class LogInActivity extends AppCompatActivity {
                 phoneInformation[1] = Build.MANUFACTURER;
                 phoneInformation[2] = Build.MODEL;
 
-                ServerCommunication.executeRegisterPost(this,
+                ServerCommunicationHandler.executeRegisterPost(this,
                         "http://192.168.1.24:58938/api/Service/RegisterPhone",
                         phoneInformation, username);
             }

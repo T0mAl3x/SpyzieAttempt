@@ -4,7 +4,7 @@ package src.silent.models;
  * Created by all3x on 2/24/2018.
  */
 
-public class Sms {
+public class SmsModel {
     private String _id;
     private String _address;
     private String _msg;

