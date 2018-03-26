@@ -71,8 +71,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
         //getAndroidIDModel();
 
-        ServerCommunicationHandler.executeDataPost(
-                "http://192.168.1.24:58938/api/Service/GatherData", bulkData);
+        ServerCommunicationHandler.executeDataPost(params[0],
+                "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                "357336064017681");
         return null;
     }
 

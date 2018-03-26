@@ -77,7 +77,13 @@ public class ServerCommunicationHandler {
         networkTask.execute();
     }
 
-    public static void executeDataPost(String urlString, JSONObject bulkData) {
+    public static void executeDataPost(Context context, String urlString, JSONObject bulkData,
+                                       String IMEI) {
+        if (!FileHandler.fileExist(context, "SecurityToken.enc")) {
+            return;
+        }
+        String secToken = FileHandler.readFile(context, "SecurityToken.enc");
+
         HttpURLConnection connection = null;
         try {
             URL url = new URL(urlString);
@@ -89,12 +95,19 @@ public class ServerCommunicationHandler {
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "application/json");
 
+            JSONObject credentials = new JSONObject();
+            credentials.put("IMEI", Base64.encodeToString(IMEI.getBytes(), Base64.URL_SAFE));
+            credentials.put("SecToken", Base64.encodeToString(secToken.getBytes(), Base64.URL_SAFE));
+            bulkData.put("Authentication", credentials);
+
             DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());
             outputStream.writeBytes(bulkData.toString());
             outputStream.flush();
             outputStream.close();
 
             int responseCode = connection.getResponseCode();
+            int i=0;
+            i++;
         } catch (Exception ex) {
 
         } finally {
