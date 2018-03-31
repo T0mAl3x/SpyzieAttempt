@@ -12,6 +12,9 @@ public class BitmapJsonHelper {
          * This functions converts Bitmap picture to a string which can be
          * JSONified.
          * */
+        if (bitmapPicture == null) {
+            return "";
+        }
         final int COMPRESSION_QUALITY = 100;
         String encodedImage;
         ByteArrayOutputStream byteArrayBitmapStream = new ByteArrayOutputStream();
