@@ -23,7 +23,6 @@ public class JobMaster extends JobService {
             }
         };
         jobExecutioner.execute(getApplicationContext());
-
         return true;
     }
 

