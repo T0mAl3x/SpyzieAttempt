@@ -46,7 +46,7 @@ public class LogInActivity extends AppCompatActivity {
         buttonSettings.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Intent myIntent = new Intent( Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                Intent myIntent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
                 startActivity(myIntent);
             }
         });
@@ -125,7 +125,6 @@ public class LogInActivity extends AppCompatActivity {
                             Toast.LENGTH_LONG).show();
                 }
             }
-
         } catch (Exception ex) {
             Toast.makeText(getApplicationContext(), "Registration failed!",
                     Toast.LENGTH_LONG).show();
@@ -159,20 +158,22 @@ public class LogInActivity extends AppCompatActivity {
     }
 
     private void checkGps() {
-        LocationManager lm = (LocationManager)getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
+        LocationManager lm = (LocationManager) getApplicationContext().getSystemService(Context.LOCATION_SERVICE);
         boolean gps_enabled = false;
         boolean network_enabled = false;
 
         try {
             gps_enabled = lm.isProviderEnabled(LocationManager.GPS_PROVIDER);
-        } catch(Exception ex) {}
+        } catch (Exception ex) {
+        }
 
         try {
             network_enabled = lm.isProviderEnabled(LocationManager.NETWORK_PROVIDER);
-        } catch(Exception ex) {}
+        } catch (Exception ex) {
+        }
 
         Button button = findViewById(R.id.button3);
-        if(!gps_enabled && !network_enabled) {
+        if (!gps_enabled && !network_enabled) {
             button.setVisibility(View.VISIBLE);
         } else {
             button.setVisibility(View.INVISIBLE);
