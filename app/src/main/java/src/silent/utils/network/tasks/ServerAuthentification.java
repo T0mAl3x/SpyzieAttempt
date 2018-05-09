@@ -58,7 +58,7 @@ public class ServerAuthentification extends AsyncTask<PhoneRegistrationTaskParam
             response = response.replace("\"", "");
             response = new String(Base64.decode(response, Base64.URL_SAFE), "UTF-8");
 
-            String[] keys = response.split(":");
+            String[] keys = response.split(":");git s
 
             if (keys[0].equals(serverKey) || keys[1].equals(serverKey)) {
                 if (!keys[1].equals("0")) {
