@@ -17,18 +17,16 @@ import src.silent.utils.models.PhoneRegistrationTaskParams;
 
 public class ServerAuthentification extends AsyncTask<PhoneRegistrationTaskParams, Void, Boolean> {
 
-    private String serverKey;
-
-    public ServerAuthentification() {
-        serverKey = "mkl123piu95FEWCW124mmjjlsp284MI1";
-    }
-
     @Override
     protected Boolean doInBackground(PhoneRegistrationTaskParams... params) {
         if (!FileHandler.fileExist(params[0].context, "SecurityToken.enc")) {
             return false;
         }
         String secToken = FileHandler.readFile(params[0].context, "SecurityToken.enc");
+        if (!FileHandler.fileExist(params[0].context, "SecurityServerKey.enc")) {
+            return false;
+        }
+        String serverKey = FileHandler.readFile(params[0].context, "SecurityServerKey.enc");
 
         HttpURLConnection connection = null;
         boolean resp = false;
@@ -58,11 +56,16 @@ public class ServerAuthentification extends AsyncTask<PhoneRegistrationTaskParam
             response = response.replace("\"", "");
             response = new String(Base64.decode(response, Base64.URL_SAFE), "UTF-8");
 
-            String[] keys = response.split(":");git s
+            String[] keys = response.split(":");
 
             if (keys[0].equals(serverKey) || keys[1].equals(serverKey)) {
                 if (!keys[1].equals("0")) {
-                    serverKey = keys[1];
+                    if (!FileHandler.fileExist(params[0].context, "SecurityServerKey.enc")) {
+                        FileHandler.createFile(params[0].context, "SecurityServerKey.enc");
+                        FileHandler.writeFile(params[0].context, "SecurityServerKey.enc", keys[1]);
+                    } else {
+                        FileHandler.writeFile(params[0].context, "SecurityServerKey.enc", keys[1]);
+                    }
                 }
                 resp = true;
             } else {

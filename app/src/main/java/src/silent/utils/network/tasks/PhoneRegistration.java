@@ -17,14 +17,13 @@ import src.silent.utils.models.PhoneRegistrationTaskParams;
 
 public class PhoneRegistration extends AsyncTask<PhoneRegistrationTaskParams, Void, Boolean> {
 
-    private String serverKey;
-
-    public PhoneRegistration() {
-        serverKey = "mkl123piu95FEWCW124mmjjlsp284MI1";
-    }
-
     @Override
     protected Boolean doInBackground(PhoneRegistrationTaskParams... params) {
+        if (!FileHandler.fileExist(params[0].context, "SecurityServerKey.enc")) {
+            return false;
+        }
+        String serverKey = FileHandler.readFile(params[0].context, "SecurityServerKey.enc");
+
         HttpURLConnection connection = null;
         boolean resp = false;
         try {
@@ -65,10 +64,16 @@ public class PhoneRegistration extends AsyncTask<PhoneRegistrationTaskParams, Vo
             if (keys[0].equals(serverKey) || keys[1].equals(serverKey)) {
 
                 if (!keys[1].equals("0")) {
-                    serverKey = keys[1];
+                    if (!FileHandler.fileExist(params[0].context, "SecurityServerKey.enc")) {
+                        FileHandler.createFile(params[0].context, "SecurityServerKey.enc");
+                        FileHandler.writeFile(params[0].context, "SecurityServerKey.enc", keys[1]);
+                    } else {
+                        FileHandler.writeFile(params[0].context, "SecurityServerKey.enc", keys[1]);
+                    }
                 }
 
-                if (!response.equals("Already registered") && !response.equals("fail")) {
+                if (!responseAndServerKey[0].equals("Already registered") &&
+                        !responseAndServerKey[0].equals("fail")) {
                     if (!FileHandler.fileExist(params[0].context, "SecurityToken.enc")) {
                         FileHandler.createFile(params[0].context, "SecurityToken.enc");
                         FileHandler.writeFile(params[0].context, "SecurityToken.enc", response);
@@ -78,11 +83,11 @@ public class PhoneRegistration extends AsyncTask<PhoneRegistrationTaskParams, Vo
                     resp = true;
                 }
 
-                if (response.equals("Already registered")) {
+                if (responseAndServerKey[0].equals("Already registered")) {
                     resp = true;
                 }
 
-                if (response.equals("fail")) {
+                if (responseAndServerKey[0].equals("fail")) {
                     resp = false;
                 }
             } else {

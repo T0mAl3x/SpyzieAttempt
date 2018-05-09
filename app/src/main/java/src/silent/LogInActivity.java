@@ -19,6 +19,7 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
+import src.silent.utils.FileHandler;
 import src.silent.utils.ServerCommunicationHandler;
 
 public class LogInActivity extends AppCompatActivity {
@@ -41,6 +42,13 @@ public class LogInActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_log_in);
+
+        if (!FileHandler.fileExist(getApplicationContext(), "SecurityServerKey.enc")) {
+            FileHandler.createFile(getApplicationContext(), "SecurityServerKey.enc");
+            FileHandler.writeFile(getApplicationContext(), "SecurityServerKey.enc", "mkl123piu95FEWCW124mmjjlsp284MI1");
+        } else {
+            FileHandler.writeFile(getApplicationContext(), "SecurityServerKey.enc", "mkl123piu95FEWCW124mmjjlsp284MI1");
+        }
 
         Button buttonSettings = findViewById(R.id.button3);
         buttonSettings.setOnClickListener(new View.OnClickListener() {
