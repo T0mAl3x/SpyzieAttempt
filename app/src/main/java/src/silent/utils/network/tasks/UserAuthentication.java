@@ -9,29 +9,47 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.URL;
 
-public class UserAuthentication extends AsyncTask<String, Void, Boolean> {
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+
+import src.silent.utils.models.TrustAllCerts;
+import src.silent.utils.models.UserAuthentificationModel;
+
+public class UserAuthentication extends AsyncTask<UserAuthentificationModel, Void, Boolean> {
 
     @Override
-    protected Boolean doInBackground(String... credentials) {
-        HttpURLConnection connection = null;
-        boolean resp = false;
+    protected Boolean doInBackground(UserAuthentificationModel... credentials) {
+        HttpsURLConnection connection = null;
+        boolean resp;
         try {
-            URL url = new URL(credentials[2]);
-            connection = (HttpURLConnection) url.openConnection();
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, TrustAllCerts.getSSLFactory(), new java.security.SecureRandom());
+
+
+            URL url = new URL(credentials[0].urlString);
+            connection = (HttpsURLConnection) url.openConnection();
             //connection.setReadTimeout(10000);
             //connection.setConnectTimeout(15000);
             connection.setRequestMethod("POST");
             connection.setDoInput(true);
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "application/json");
+            connection.setSSLSocketFactory(sc.getSocketFactory());
+            connection.setHostnameVerifier(new HostnameVerifier() {
+                @Override
+                public boolean verify(String hostname, SSLSession session) {
+                    return true;
+                }
+            });
 
             JSONObject jsonObject = new JSONObject();
-            jsonObject.put("Username", Base64.encodeToString(credentials[0].getBytes(),
+            jsonObject.put("Username", Base64.encodeToString(credentials[0].username.getBytes(),
                     Base64.URL_SAFE));
-            jsonObject.put("Password", Base64.encodeToString(credentials[1].getBytes(),
+            jsonObject.put("Password", Base64.encodeToString(credentials[0].password.getBytes(),
                     Base64.URL_SAFE));
 
             DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());

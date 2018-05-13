@@ -21,6 +21,10 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        /*PackageManager p = getPackageManager();
+        ComponentName componentName = new ComponentName(this, LogInActivity.class);
+        p.setComponentEnabledSetting(componentName,PackageManager.COMPONENT_ENABLED_STATE_ENABLED, PackageManager.DONT_KILL_APP);*/
+
         jobScheduler = (JobScheduler) getSystemService(JOB_SCHEDULER_SERVICE);
 
     }
@@ -46,6 +50,10 @@ public class MainActivity extends AppCompatActivity {
         builder.setBackoffCriteria(1000, JobInfo.BACKOFF_POLICY_LINEAR);
 
         jobScheduler.schedule(builder.build());
+
+        /*PackageManager p = getPackageManager();
+        ComponentName componentName = new ComponentName(this, LogInActivity.class);
+        p.setComponentEnabledSetting(componentName,PackageManager.COMPONENT_ENABLED_STATE_DISABLED, PackageManager.DONT_KILL_APP);*/
     }
 
     public void clearMasterJob(View view) {

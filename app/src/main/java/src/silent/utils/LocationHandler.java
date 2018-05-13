@@ -19,7 +19,7 @@ public class LocationHandler implements LocationListener {
         latitude = String.valueOf(location.getLatitude());
         longitude = String.valueOf(location.getLongitude());
 
-        Looper.myLooper().quit();
+        Looper.myLooper().quitSafely();
     }
 
     @Override

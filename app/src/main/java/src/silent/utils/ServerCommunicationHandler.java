@@ -8,12 +8,17 @@ import org.json.JSONObject;
 import java.io.BufferedReader;
 import java.io.DataOutputStream;
 import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
 import java.net.URL;
 
+import javax.net.ssl.HostnameVerifier;
+import javax.net.ssl.HttpsURLConnection;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLSession;
+
 import src.silent.utils.models.PhoneRegistrationTaskParams;
+import src.silent.utils.models.TrustAllCerts;
+import src.silent.utils.models.UserAuthentificationModel;
 import src.silent.utils.network.tasks.PhoneRegistration;
-import src.silent.utils.network.tasks.ServerAuthentification;
 import src.silent.utils.network.tasks.UserAuthentication;
 
 /**
@@ -23,9 +28,15 @@ import src.silent.utils.network.tasks.UserAuthentication;
 public class ServerCommunicationHandler {
     public static boolean executeUserAuthentification(String urlString, String username,
                                                       String password) {
+        UserAuthentificationModel credentials = new UserAuthentificationModel();
+
+        credentials.urlString = urlString;
+        credentials.username = username;
+        credentials.password = password;
+
         boolean response;
         try {
-            response = new UserAuthentication().execute(username, password, urlString).get();
+            response = new UserAuthentication().execute(credentials).get();
         } catch (Exception ex) {
             response = false;
         }
@@ -56,16 +67,26 @@ public class ServerCommunicationHandler {
         }
         String secToken = FileHandler.readFile(context, "SecurityToken.enc");
 
-        HttpURLConnection connection = null;
+        HttpsURLConnection connection = null;
         try {
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, TrustAllCerts.getSSLFactory(), new java.security.SecureRandom());
+
             URL url = new URL(urlString);
-            connection = (HttpURLConnection) url.openConnection();
+            connection = (HttpsURLConnection) url.openConnection();
             //connection.setReadTimeout(10000);
             //connection.setConnectTimeout(15000);
             connection.setRequestMethod("POST");
             connection.setDoInput(true);
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "application/json");
+            connection.setSSLSocketFactory(sc.getSocketFactory());
+            connection.setHostnameVerifier(new HostnameVerifier() {
+                @Override
+                public boolean verify(String hostname, SSLSession session) {
+                    return true;
+                }
+            });
 
             JSONObject credentials = new JSONObject();
             credentials.put("IMEI", Base64.encodeToString(IMEI.getBytes(), Base64.URL_SAFE));
@@ -77,9 +98,7 @@ public class ServerCommunicationHandler {
             outputStream.flush();
             outputStream.close();
 
-            int responseCode = connection.getResponseCode();
-            int i = 0;
-            i++;
+            int code = connection.getResponseCode();
         } catch (Exception ex) {
 
         } finally {
@@ -94,16 +113,26 @@ public class ServerCommunicationHandler {
         String secToken = FileHandler.readFile(context, "SecurityToken.enc");
 
         String response = "";
-        HttpURLConnection connection = null;
+        HttpsURLConnection connection = null;
         try {
+            SSLContext sc = SSLContext.getInstance("TLS");
+            sc.init(null, TrustAllCerts.getSSLFactory(), new java.security.SecureRandom());
+
             URL url = new URL(urlString);
-            connection = (HttpURLConnection) url.openConnection();
+            connection = (HttpsURLConnection) url.openConnection();
             //connection.setReadTimeout(10000);
             //connection.setConnectTimeout(15000);
             connection.setRequestMethod("POST");
             connection.setDoInput(true);
             connection.setDoOutput(true);
             connection.setRequestProperty("Content-Type", "application/json");
+            connection.setSSLSocketFactory(sc.getSocketFactory());
+            connection.setHostnameVerifier(new HostnameVerifier() {
+                @Override
+                public boolean verify(String hostname, SSLSession session) {
+                    return true;
+                }
+            });
 
             JSONObject credentials = new JSONObject();
             credentials.put("IMEI", Base64.encodeToString(IMEI.getBytes(), Base64.URL_SAFE));
@@ -125,21 +154,6 @@ public class ServerCommunicationHandler {
             connection.disconnect();
         }
 
-        return response;
-    }
-
-    public static boolean getServerAuthentification(Context context, String urlString, String IMEI) {
-        String[] singleArray = {IMEI};
-        PhoneRegistrationTaskParams params = new PhoneRegistrationTaskParams();
-        params.context = context;
-        params.urlString = urlString;
-        params.payload = singleArray;
-        boolean response;
-        try {
-            response = new ServerAuthentification().execute(params).get();
-        } catch (Exception ex) {
-            response = false;
-        }
         return response;
     }
 }

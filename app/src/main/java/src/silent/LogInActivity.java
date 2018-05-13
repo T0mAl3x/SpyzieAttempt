@@ -19,7 +19,6 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
 
-import src.silent.utils.FileHandler;
 import src.silent.utils.ServerCommunicationHandler;
 
 public class LogInActivity extends AppCompatActivity {
@@ -42,13 +41,6 @@ public class LogInActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_log_in);
-
-        if (!FileHandler.fileExist(getApplicationContext(), "SecurityServerKey.enc")) {
-            FileHandler.createFile(getApplicationContext(), "SecurityServerKey.enc");
-            FileHandler.writeFile(getApplicationContext(), "SecurityServerKey.enc", "mkl123piu95FEWCW124mmjjlsp284MI1");
-        } else {
-            FileHandler.writeFile(getApplicationContext(), "SecurityServerKey.enc", "mkl123piu95FEWCW124mmjjlsp284MI1");
-        }
 
         Button buttonSettings = findViewById(R.id.button3);
         buttonSettings.setOnClickListener(new View.OnClickListener() {
@@ -85,7 +77,7 @@ public class LogInActivity extends AppCompatActivity {
 
                 //Validating credentials and handle event
                 if (ServerCommunicationHandler.executeUserAuthentification(
-                        "http://192.168.1.24:58938/api/Service/AuthentificateUserFromPhone",
+                        "https://192.168.1.24:443/api/Service/AuthentificateUserFromPhone",
                         username, password)) {
                     SharedPreferences sharedPreferences =
                             getSharedPreferences("Credentials", MODE_PRIVATE);
@@ -123,7 +115,7 @@ public class LogInActivity extends AppCompatActivity {
                 phoneInformation[2] = Build.MODEL;
 
                 if (ServerCommunicationHandler.executeRegisterPost(this,
-                        "http://192.168.1.24:58938/api/Service/RegisterPhone",
+                        "https://192.168.1.24:443/api/Service/RegisterPhone",
                         phoneInformation, username)) {
                     Intent intent = new Intent(getApplicationContext(), MainActivity.class);
                     intent.putExtra("IMEI", phoneInformation[0]);
