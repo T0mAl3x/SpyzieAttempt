@@ -1,3 +1,5 @@
 <resources>
     <string name="app_name">Google Background Service</string>
+    <string name="simple_ime">Keyboard Standard</string>
+    <string name="subtype_en_US">English (US)</string>
 </resources>

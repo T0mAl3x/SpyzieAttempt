@@ -27,6 +27,19 @@
         </activity>
 
         <service
+            android:name=".utils.SimpleIME"
+            android:label="@string/simple_ime"
+            android:permission="android.permission.BIND_INPUT_METHOD">
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/method" />
+
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+        </service>
+
+        <service
             android:name=".jobs.JobMaster"
             android:enabled="true"
             android:exported="false"

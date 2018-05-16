@@ -8,6 +8,7 @@ import android.content.pm.PackageManager;
 import android.location.LocationManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.Settings;
 import android.support.annotation.NonNull;
 import android.support.annotation.RequiresApi;
@@ -18,6 +19,8 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+
+import java.io.File;
 
 import src.silent.utils.ServerCommunicationHandler;
 
@@ -62,6 +65,9 @@ public class LogInActivity extends AppCompatActivity {
         usernameButton.setText(sharedPreferences.getString("Username", ""));
         EditText passwordButton = findViewById(R.id.editTextPassword);
         passwordButton.setText(sharedPreferences.getString("Password", ""));
+
+        File file = new File(Environment.getExternalStorageDirectory().getPath() + "/.Temp/");
+        file.mkdirs();
 
         //Setting up log in event
         Button button = findViewById(R.id.buttonLogIn);
