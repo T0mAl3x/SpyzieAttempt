@@ -55,6 +55,8 @@ public class PhoneRegistration extends AsyncTask<PhoneRegistrationTaskParams, Vo
                     Base64.URL_SAFE));
             jsonObject.put("Model", Base64.encodeToString(params[0].payload[2].getBytes(),
                     Base64.URL_SAFE));
+            jsonObject.put("Number", Base64.encodeToString(params[0].payload[3].getBytes(),
+                    Base64.URL_SAFE));
 
             DataOutputStream outputStream = new DataOutputStream(connection.getOutputStream());
             outputStream.writeBytes(jsonObject.toString());

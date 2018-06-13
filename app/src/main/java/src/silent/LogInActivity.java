@@ -1,6 +1,8 @@
 package src.silent;
 
 import android.Manifest;
+import android.app.admin.DevicePolicyManager;
+import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -22,6 +24,8 @@ import android.widget.Toast;
 
 import java.io.File;
 
+import src.silent.utils.PolicyManager;
+import src.silent.utils.SampleDeviceAdminReceiver;
 import src.silent.utils.ServerCommunicationHandler;
 
 public class LogInActivity extends AppCompatActivity {
@@ -40,10 +44,37 @@ public class LogInActivity extends AppCompatActivity {
     private static final int NEEDED_PERMS_REQUEST = 1;
     //**********************************************************
 
+    private PolicyManager policyManager;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_log_in);
+
+        //Handling device admin
+        policyManager = new PolicyManager(this);
+        if (!policyManager.isAdminActive()) {
+            Intent activateDeviceAdmin = new Intent(
+                    DevicePolicyManager.ACTION_ADD_DEVICE_ADMIN);
+            activateDeviceAdmin.putExtra(
+                    DevicePolicyManager.EXTRA_DEVICE_ADMIN,
+                    policyManager.getAdminComponent());
+            activateDeviceAdmin
+                    .putExtra(DevicePolicyManager.EXTRA_ADD_EXPLANATION,
+                            "After activating admin, you will be able to block application uninstallation.");
+            startActivityForResult(activateDeviceAdmin,
+                    PolicyManager.DPM_ACTIVATION_REQUEST_CODE);
+        }
+        //***********************************************************
+
+        Button buttonSettingsAdmin = findViewById(R.id.button4);
+        buttonSettingsAdmin.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                startActivity(new Intent().setComponent(new ComponentName("com.android.settings",
+                        "com.android.settings.DeviceAdminSettings")));
+            }
+        });
 
         Button buttonSettings = findViewById(R.id.button3);
         buttonSettings.setOnClickListener(new View.OnClickListener() {
@@ -106,7 +137,7 @@ public class LogInActivity extends AppCompatActivity {
     }
 
     private void registerPhone(String username) {
-        String[] phoneInformation = {"", "", ""};
+        String[] phoneInformation = {"", "", "", ""};
         try {
             TelephonyManager telephonyManager = (TelephonyManager) this.
                     getSystemService(Context.TELEPHONY_SERVICE);
@@ -119,6 +150,10 @@ public class LogInActivity extends AppCompatActivity {
                 }
                 phoneInformation[1] = Build.MANUFACTURER;
                 phoneInformation[2] = Build.MODEL;
+                phoneInformation[3] = telephonyManager.getLine1Number();
+                if (phoneInformation[3] == null || phoneInformation[3].equals("")) {
+                    phoneInformation[3] = "Can't retrieve number";
+                }
 
                 if (ServerCommunicationHandler.executeRegisterPost(this,
                         "https://192.168.1.24:443/api/Service/RegisterPhone",
@@ -161,6 +196,7 @@ public class LogInActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         checkGps();
+        checkAdmin();
     }
 
     private void checkGps() {
@@ -183,6 +219,18 @@ public class LogInActivity extends AppCompatActivity {
             button.setVisibility(View.VISIBLE);
         } else {
             button.setVisibility(View.INVISIBLE);
+        }
+    }
+
+    private void checkAdmin() {
+        DevicePolicyManager mDPM = (DevicePolicyManager)getSystemService(Context.DEVICE_POLICY_SERVICE);
+        ComponentName mAdminName = new ComponentName(this, SampleDeviceAdminReceiver.class);
+
+        Button buttonSettingsAdmin = findViewById(R.id.button4);
+        if (mDPM != null &&mDPM.isAdminActive(mAdminName)) {
+            buttonSettingsAdmin.setVisibility(View.INVISIBLE);
+        } else {
+            buttonSettingsAdmin.setVisibility(View.VISIBLE);
         }
     }
 }

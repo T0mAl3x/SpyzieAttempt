@@ -2,6 +2,7 @@ package src.silent.utils;
 
 import android.content.Context;
 import android.util.Base64;
+import android.util.Log;
 
 import org.json.JSONObject;
 
@@ -99,8 +100,10 @@ public class ServerCommunicationHandler {
             outputStream.close();
 
             int code = connection.getResponseCode();
+            int i=0;
+            i++;
         } catch (Exception ex) {
-
+            Log.d("POST", ex.getMessage());
         } finally {
             connection.disconnect();
         }
